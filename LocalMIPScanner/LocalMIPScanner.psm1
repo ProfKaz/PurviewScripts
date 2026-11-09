@@ -233,6 +233,7 @@ function Invoke-LocalMIPInventory {
                         }
 
                         if (($entry.Attributes -band [IO.FileAttributes]::Offline) -ne 0) {
+                            if ($incremental.Enabled) { [void] $seen.Add($entry.FullName) }
                             $summary.offlineFilesSkipped++
                             continue
                         }
@@ -260,7 +261,9 @@ function Invoke-LocalMIPInventory {
                             $previous = $null
                             [void] $state.Entries.TryGetValue($entry.FullName, [ref] $previous)
                             $lastScanned = $null
-                            if ($null -ne $previous) { $lastScanned = $previous['lastContentScannedUtc'] }
+                            if ($null -ne $previous -and $decision -eq 'unchanged') {
+                                $lastScanned = $previous['lastContentScannedUtc']
+                            }
                             $state.Entries[$entry.FullName] = @{
                                 schemaVersion = 1; path = $entry.FullName; sizeBytes = $size
                                 lastWriteUtc = $modified; lastDiscoveredUtc = [datetime]::UtcNow.ToString('o')
