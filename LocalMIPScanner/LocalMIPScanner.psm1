@@ -1,6 +1,8 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+Import-Module (Join-Path $PSScriptRoot 'LocalMIPState.psm1') -Force
+
 function ConvertTo-LocalPath {
     param([string] $Path)
 
@@ -97,9 +99,11 @@ function Invoke-LocalMIPInventory {
 
     if (-not $IsWindows) { throw 'LocalMIPScanner requires Windows.' }
     $config = Get-InventoryConfig $ConfigDirectory
+    $incremental = Get-IncrementalSettings $ConfigDirectory
     $logPath = ConvertTo-LocalPath $LogDirectory
     $roots = @($Root | ForEach-Object { ConvertTo-LocalPath $_ } | Sort-Object -Property Length)
     $config.Exclusions += $logPath
+    if ($incremental.Enabled) { $config.Exclusions += $incremental.StateDirectory }
 
     $logParent = [IO.DirectoryInfo]::new($logPath)
     while (-not $logParent.Exists -and $null -ne $logParent.Parent) {
@@ -122,8 +126,25 @@ function Invoke-LocalMIPInventory {
         reparsePointsSkipped = 0
         offlineFilesSkipped = 0
         errors = 0
+        newFiles = 0
+        modifiedFiles = 0
+        unchangedFiles = 0
+        dueFiles = 0
+        deletedFiles = 0
+        oversizedFiles = 0
+        pendingClassification = 0
+        stateLoadMilliseconds = 0
+        enumerationMilliseconds = 0
+        stateSaveMilliseconds = 0
     }
     $timer = [Diagnostics.Stopwatch]::StartNew()
+    $state = $null
+    $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    if ($incremental.Enabled) {
+        $stateTimer = [Diagnostics.Stopwatch]::StartNew()
+        $state = Open-IncrementalState $incremental
+        $summary.stateLoadMilliseconds = $stateTimer.ElapsedMilliseconds
+    }
     $completedRoots = [Collections.Generic.List[string]]::new()
     $pending = [Collections.Generic.Stack[string]]::new()
     $options = [IO.EnumerationOptions]::new()
@@ -137,6 +158,7 @@ function Invoke-LocalMIPInventory {
             runId = $runId
             startedUtc = $summary.startedUtc
             roots = $roots
+            incrementalEnabled = [bool] $incremental.Enabled
         })
 
         foreach ($rootPath in $roots) {
@@ -211,16 +233,51 @@ function Invoke-LocalMIPInventory {
                         }
 
                         if (($entry.Attributes -band [IO.FileAttributes]::Offline) -ne 0) {
+                            if ($incremental.Enabled) { [void] $seen.Add($entry.FullName) }
                             $summary.offlineFilesSkipped++
                             continue
                         }
 
+                        $size = [long] $entry.Length
+                        $modified = $entry.LastWriteTimeUtc.ToString('o')
+                        $decision = 'inventory'
+                        if ($incremental.Enabled) {
+                            [void] $seen.Add($entry.FullName)
+                            if ($size -gt $incremental.MaxBytes) {
+                                $summary.oversizedFiles++
+                                Write-InventoryEvent $writer ([ordered] @{
+                                    event = 'skip'; reason = 'oversized'; path = $entry.FullName
+                                    sizeBytes = $size
+                                })
+                                continue
+                            }
+                            $decision = Get-FileInventoryDecision -Settings $incremental -Entries $state.Entries -Path $entry.FullName -SizeBytes $size -LastWriteUtc $modified -Now ([datetime]::UtcNow)
+                            switch ($decision) {
+                                'new' { $summary.newFiles++ }
+                                'modified' { $summary.modifiedFiles++ }
+                                'due' { $summary.dueFiles++ }
+                                'unchanged' { $summary.unchangedFiles++ }
+                            }
+                            $previous = $null
+                            [void] $state.Entries.TryGetValue($entry.FullName, [ref] $previous)
+                            $lastScanned = $null
+                            if ($null -ne $previous -and $decision -eq 'unchanged') {
+                                $lastScanned = $previous['lastContentScannedUtc']
+                            }
+                            $state.Entries[$entry.FullName] = @{
+                                schemaVersion = 1; path = $entry.FullName; sizeBytes = $size
+                                lastWriteUtc = $modified; lastDiscoveredUtc = [datetime]::UtcNow.ToString('o')
+                                lastContentScannedUtc = $lastScanned; status = 'PendingClassification'
+                            }
+                            $summary.pendingClassification++
+                        }
                         Write-InventoryEvent $writer ([ordered] @{
                             event = 'file'
                             path = $entry.FullName
                             extension = $entry.Extension.ToLowerInvariant()
-                            sizeBytes = $entry.Length
-                            lastWriteUtc = $entry.LastWriteTimeUtc.ToString('o')
+                            sizeBytes = $size
+                            lastWriteUtc = $modified
+                            decision = $decision
                         })
                         $summary.inventoried++
                     }
@@ -235,10 +292,37 @@ function Invoke-LocalMIPInventory {
             }
         }
 
+        $summary.enumerationMilliseconds = $timer.ElapsedMilliseconds - $summary.stateLoadMilliseconds
+        if ($incremental.Enabled) {
+            # A partial traversal cannot safely determine which records have been deleted.
+            if ($summary.errors -eq 0 -and $incremental.DetectDeleted) {
+                $removed = [Collections.Generic.List[string]]::new()
+                foreach ($knownPath in @($state.Entries.Keys)) {
+                    $inScope = $false
+                    foreach ($rootPath in $roots) {
+                        if (Test-PathWithin $knownPath $rootPath) { $inScope = $true; break }
+                    }
+                    if (-not $inScope -or $seen.Contains($knownPath)) { continue }
+                    if ($config.Exclusions.Where({ Test-PathWithin $knownPath $_ }, 'First').Count -gt 0) { continue }
+                    if (-not $config.Extensions.Contains([IO.Path]::GetExtension($knownPath))) { continue }
+                    # A file that became oversized is recorded as seen, not deleted.
+                    $removed.Add($knownPath)
+                }
+                foreach ($knownPath in $removed) {
+                    $state.Entries.Remove($knownPath) | Out-Null
+                    $summary.deletedFiles++
+                    Write-InventoryEvent $writer ([ordered] @{ event = 'deleted'; path = $knownPath })
+                }
+            }
+            $saveTimer = [Diagnostics.Stopwatch]::StartNew()
+            Save-IncrementalState $state
+            $summary.stateSaveMilliseconds = $saveTimer.ElapsedMilliseconds
+        }
         $summary.elapsedMilliseconds = $timer.ElapsedMilliseconds
         Write-InventoryEvent $writer $summary
     } finally {
         $writer.Dispose()
+        if ($null -ne $state) { $state.Lock.Dispose() }
     }
 
     [pscustomobject] ($summary + @{ logFile = $logFile })
