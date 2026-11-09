@@ -112,3 +112,5 @@ function Get-FileInventoryDecision {
     # but can be skipped for metadata refresh using the unchanged status.
     return 'unchanged'
 }
+
+Export-ModuleMember -Function Get-IncrementalSettings, Open-IncrementalState, Save-IncrementalState, Get-FileInventoryDecision
