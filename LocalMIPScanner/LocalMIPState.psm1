@@ -76,12 +76,28 @@ function Open-IncrementalState {
             foreach ($line in [IO.File]::ReadLines($file)) {
                 if ([string]::IsNullOrWhiteSpace($line)) { continue }
                 $item = ConvertFrom-Json -InputObject $line -AsHashtable -ErrorAction Stop
+                # ConvertFrom-Json can return Int32 for small numbers and Int64
+                # for larger ones. Neither JSON nor the state schema guarantees
+                # a particular CLR integer width.
+                $sizeValue = $item['sizeBytes']
+                $integerType = $null -ne $sizeValue -and
+                    $sizeValue.GetType().FullName -in @(
+                        'System.Byte', 'System.SByte', 'System.Int16', 'System.UInt16',
+                        'System.Int32', 'System.UInt32', 'System.Int64', 'System.UInt64'
+                    )
+                $parsedSize = [long] 0
+                if ($integerType) {
+                    try { $parsedSize = [long] $sizeValue }
+                    catch [OverflowException] { $integerType = $false }
+                }
                 if ($item['schemaVersion'] -ne 1 -or
                     $item['path'] -isnot [string] -or
-                    $item['sizeBytes'] -isnot [long] -or
+                    [string]::IsNullOrWhiteSpace($item['path']) -or
+                    -not $integerType -or $parsedSize -lt 0 -or
                     $item['lastWriteUtc'] -isnot [string]) {
                     throw "Invalid incremental state entry in $file"
                 }
+                $item['sizeBytes'] = $parsedSize
                 $entries[$item['path']] = $item
             }
         }
