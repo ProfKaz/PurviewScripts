@@ -13,10 +13,10 @@ cd C:\Deploy\LocalMIPScanner
 
 Si el instalador fue descargado mediante un navegador y Windows lo bloquea, puedes desbloquear **solo el instalador** antes de ejecutarlo: `Unblock-File -LiteralPath .\Install-LocalMIPScanner.ps1`.
 
-Por defecto obtiene la rama `feature/localmipscanner-m2-incremental` durante la validación de M2. Una vez integrado el PR, usa `-Ref main`. Para instalar sin preguntas y desbloquear automáticamente los scripts de la raíz y `tests`:
+Por defecto obtiene la rama `main`. Para probar específicamente las correcciones del PR #4 antes de fusionarlas, indica `-Ref fix/localmipscanner-m2-module-reload-pr4`. Para instalar sin preguntas y desbloquear automáticamente los scripts de la raíz y `tests`:
 
 ~~~powershell
-.\Install-LocalMIPScanner.ps1 -Destination 'C:\Deploy\LocalMIPScanner' -Ref feature/localmipscanner-m2-incremental -Unblock -NoPrompt
+.\Install-LocalMIPScanner.ps1 -Destination 'C:\Deploy\LocalMIPScanner' -Ref main -Unblock -NoPrompt
 ~~~
 
 El instalador no requiere Git ni permisos elevados. Resuelve el commit en GitHub y obtiene su árbol para inventariar **todos** los archivos de `LocalMIPScanner`, incluidos `Config`, scripts, módulos y pruebas. Compara cada archivo con el hash de objeto Git del repositorio (SHA-1 calculado sobre `blob <length>\0 + contenido`); los archivos intactos no se descargan nuevamente. Todas las descargas se guardan temporalmente y se verifican contra el hash publicado por GitHub antes de instalarse. La conexión utiliza HTTPS. El instalador guarda la revisión y los hashes en `.localmipscanner-install.json`.
@@ -82,3 +82,14 @@ Get-Content -LiteralPath $second.logFile | ConvertFrom-Json |
 ~~~
 
 Es esperable que la enumeración completa continúe tardando varios minutos. Comparar `newFiles`, `unchangedFiles`, `modifiedFiles`, `stateLoadMilliseconds`, `enumerationMilliseconds` y `stateSaveMilliseconds`. No ejecutar sobre un perfil de usuario productivo con datos sensibles antes de revisar los filtros y la retención del registro de rutas.
+
+### Actualización de M1 a M2: recarga del módulo
+
+Si ejecutaste M1 y luego actualizaste a M2 en la misma sesión de PowerShell, el módulo anterior puede permanecer en memoria. El punto de entrada usa ahora `Import-Module -Force`. Se recomienda ejecutar los tests en procesos PowerShell independientes y nuevos:
+
+~~~powershell
+pwsh -NoProfile -File .\\tests\\Test-Inventory.ps1
+pwsh -NoProfile -File .\\tests\\Test-Incremental.ps1
+~~~
+
+Comprueba que el resumen contiene `newFiles`, `unchangedFiles` y `stateLoadMilliseconds` antes de recorrer `C:\\`.
