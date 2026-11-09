@@ -1,0 +1,4 @@
+{
+  "batchSize": 250,
+  "pauseMilliseconds": 25
+}
