@@ -102,3 +102,9 @@ Si `Test-Incremental.ps1` informa un archivo `inventory-*.jsonl` abierto durante
 .\\Install-LocalMIPScanner.ps1 -Ref fix/localmipscanner-m2-cleanup-pr5 -Unblock -NoPrompt
 pwsh -NoProfile -File .\\tests\\Test-Incremental.ps1
 ~~~
+
+### M2: compatibilidad del índice JSONL (PR #6)
+
+El tamaño `sizeBytes` es un número entero JSON; al leerlo con `ConvertFrom-Json -AsHashtable`, PowerShell puede materializarlo como `Int32` o `Int64` según el valor. El cargador M2 ahora acepta ambos y los normaliza a `Int64`, sin admitir valores negativos, fraccionarios ni texto. Esto corrige el error `Invalid incremental state entry` al repetir un escaneo con archivos pequeños.
+
+Para validar la corrección antes de su integración, actualiza explícitamente desde `-Ref fix/localmipscanner-m2-state-numeric-types-pr6` y ejecuta los dos tests en consolas independientes. No elimines manualmente el índice de producción; para el test se genera uno sintético en una carpeta temporal.
