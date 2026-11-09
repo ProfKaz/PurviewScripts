@@ -16,7 +16,7 @@ param(
     [ValidateNotNullOrEmpty()]
     [string] $Destination = (Get-Location).Path,
     [ValidatePattern('^[a-zA-Z0-9._/-]+$')]
-    [string] $Ref = 'feature/localmipscanner-m2-incremental',
+    [string] $Ref = 'main',
     [switch] $Unblock,
     [switch] $NoPrompt
 )
