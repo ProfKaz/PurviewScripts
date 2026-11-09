@@ -41,3 +41,45 @@ Flujo propuesto: configuración → descubrimiento → decisión incremental →
 | M4 | Integración MIP | Validar la decisión en auditoría y, con escritura habilitada en el laboratorio, aplicar y verificar etiquetas según política y formato. |
 | M5 | Optimización | Medir impacto con una muestra representativa y fijar límites operativos de CPU, memoria e I/O. |
 | M6 | Operación | Validar la identidad de la tarea programada, la recuperación tras interrupciones y la retención de registros. |
+
+## Estado incremental M2.1
+
+M2.1 usa PowerShell 7.2+ y .NET para el estado local. Con incremental desactivado, M1 conserva el descubrimiento de metadatos y los eventos de auditoría. M2.1 escribe exclusivamente estado y logs del scanner.
+
+| Archivo | Contenido |
+| --- | --- |
+| `inventory.index.jsonl` | Cabecera con versión y generación, registros de archivo, y pie end con recuento y SHA-256 de las líneas anteriores. |
+| `inventory.active.jsonl` | Cabecera con generación objetivo, generación base y huella del alcance. Guarda secuencias begin, child, seen, protect y checkpoint, y termina con end al completar la cola. |
+| `inventory.index.backup` | Única copia rotativa validada de la generación anterior. |
+| `inventory.index.tmp` e `inventory.copy.tmp` | Archivos temporales en el mismo directorio para preparar un índice, iniciar un journal o publicar una copia. |
+| `inventory.lock` | Bloqueo exclusivo por carpeta de estado. El sistema libera el descriptor si se termina el proceso. |
+| `inventory-state.jsonl` | Índice M2 legado, leído durante la migración inicial y conservado para compatibilidad. |
+
+### Recorrido y checkpoints
+
+Las raíces normalizadas inicializan la pila. Cada directorio añade al journal los hijos elegibles y las observaciones de archivos. Los archivos sin cambios emiten seen sin repetir sus metadatos. Si se actualizan los metadatos, seen incluye la entrada nueva. lastDiscoveredUtc corresponde a la observación que generó la entrada vigente. Los puntos de reanálisis y los directorios offline se protegen como prefijos, mientras que los archivos offline o demasiado grandes se contabilizan como observados. Los errores de lectura se registran y el checkpoint marca el directorio como incompleto para efectos de borrado.
+
+Un checkpoint incluye una huella de las líneas del directorio y su indicador de error. Tras vaciar los buffers del journal a disco, se aplican las observaciones a la vista de trabajo y se incorporan los hijos a la pila. Al abrir el estado, se reconstruye la pila desde el journal. Se descarta la última línea si carece de salto LF. Los registros de un directorio sin checkpoint se ignoran y el recorrido vuelve a empezar en ese directorio. Los registros completos inválidos o los checksums incorrectos detienen la reanudación. Los cambios posteriores al checkpoint de un directorio se detectan en la siguiente generación.
+
+Los candidatos a eliminación son entradas elegibles del alcance actual que no se observaron durante una generación completa. Se preservan entradas fuera de alcance, excluidas o bajo un prefijo protegido. Un solo error en cualquier segmento de la generación suspende todas las eliminaciones de esa generación. La siguiente vuelta reintenta el recorrido.
+
+### Publicación y recuperación
+
+1. Con la cola vacía, escribir end con la generación y vaciar el journal a disco.
+2. Construir y vaciar el nuevo índice temporal. Leerlo de nuevo para validar estructura, recuento y checksum.
+3. Copiar el índice confirmado a un temporal, validar la copia y renombrarla sobre el único backup.
+4. Renombrar el índice temporal sobre el principal dentro del mismo volumen. Retirar el journal después de publicar el índice.
+
+| Interrupción | Siguiente arranque |
+| --- | --- |
+| Antes del checkpoint | Volver al directorio pendiente e ignorar sus observaciones no confirmadas. |
+| Después de end y antes de publicar | Reconstruir la vista del journal sellado y reintentar la publicación. Mientras tanto, el backup puede coincidir con el principal, que sigue siendo la base de la generación pendiente. |
+| Después de publicar y antes de retirar el journal | Reconocer la generación ya publicada, retirar el journal y comenzar otro recorrido. |
+| Principal ausente o corrupto con backup válido | Restaurar el backup mediante un temporal. Reproducir el journal si corresponde a esa base. Si pertenecía a una generación posterior perdida, empezar otro recorrido desde el backup. |
+| Principal y backup inválidos | Detenerse y conservar las copias para diagnóstico. |
+
+El protocolo usa Flush(true) para los contenidos y renombres en el mismo volumen para publicar copias completas. La durabilidad del renombre ante una pérdida de energía depende del volumen y del almacenamiento. Las pruebas de proceso cubren la interrupción del scanner. La prueba con pérdida de energía en NTFS se realiza por separado.
+
+### Coste de una pasada
+
+La enumeración es secuencial y aplica la pausa de performance.json. La memoria crece con el índice, las rutas observadas, la pila de directorios y el lote del directorio actual. El journal conserva observaciones suficientes para decidir eliminaciones tras un reinicio. Un nuevo segmento vuelve a leer el índice y el journal. Cada consolidación valida y reescribe el índice completo y rota el backup. El límite de tiempo controla el recorrido entre checkpoints y deja fuera la carga y la consolidación. Estos costes se miden con archivos sintéticos antes de probar perfiles completos.

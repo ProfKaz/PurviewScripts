@@ -36,8 +36,8 @@ try {
     Assert-Value 2 $first.newFiles 'First run new'
     Assert-Value 0 $first.errors 'First run errors'
     Assert-Value 2 $first.pendingClassification 'First run pending'
-    $firstState = @(Get-Content -LiteralPath (Join-Path $state 'inventory-state.jsonl') |
-        Where-Object { $_ } | ConvertFrom-Json)
+    $firstState = @(Get-Content -LiteralPath (Join-Path $state 'inventory.index.jsonl') |
+        ConvertFrom-Json | Where-Object { $_.PSObject.Properties['path'] })
     Assert-Value 2 $firstState.Count 'Persisted initial state count'
     foreach ($record in $firstState) {
         Assert-Value 1 $record.schemaVersion 'Persisted state schema version'
@@ -57,9 +57,9 @@ try {
     Assert-Value 1 $third.modifiedFiles 'Third run modified'
     Assert-Value 1 $third.deletedFiles 'Third run deleted'
     Assert-Value 0 $third.errors 'Third run errors'
-    $stateLines = @([IO.File]::ReadAllLines((Join-Path $state 'inventory-state.jsonl')) | Where-Object { $_ })
-    Assert-Value 2 $stateLines.Count 'Final state entries'
-    $records = @($stateLines | ConvertFrom-Json)
+    $records = @(Get-Content -LiteralPath (Join-Path $state 'inventory.index.jsonl') | ConvertFrom-Json | Where-Object { $_.PSObject.Properties['path'] })
+    Assert-Value 2 $records.Count 'Final state entries'
+    Assert-Value $true $third.generationComplete 'Third generation complete'
     Assert-Value 0 @($records | Where-Object { $_.lastContentScannedUtc }).Count 'No false content scan timestamp'
     $lastEvents = @(Get-Content -LiteralPath $third.logFile | ConvertFrom-Json)
     Assert-Value 1 @($lastEvents | Where-Object event -eq 'deleted').Count 'Deleted events'

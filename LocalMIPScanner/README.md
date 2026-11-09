@@ -1,6 +1,6 @@
 # LocalMIPScanner
 
-M1 genera un inventario local en modo auditoría. M2 añade estado incremental persistente para distinguir archivos nuevos, modificados y sin cambios, sin leer su contenido. Lee rutas, extensiones, tamaños y fechas de modificación. Funciona en Windows con PowerShell 7.2 o posterior y con los permisos de la cuenta que lo ejecuta. Este hito solo inspecciona metadatos del sistema de archivos y escribe sus propios registros.
+M1 genera un inventario local en modo auditoría. M2.1 añade estado incremental persistente con reanudación por directorio para distinguir archivos nuevos, modificados y sin cambios, sin leer su contenido. Lee rutas, extensiones, tamaños y fechas de modificación. Funciona en Windows con PowerShell 7.2 o posterior y con los permisos de la cuenta que lo ejecuta. Este hito solo inspecciona metadatos del sistema de archivos y escribe sus propios registros.
 
 ## Instalador / actualizador desde GitHub
 
@@ -13,10 +13,10 @@ cd C:\Deploy\LocalMIPScanner
 
 Si el instalador fue descargado mediante un navegador y Windows lo bloquea, puedes desbloquear **solo el instalador** antes de ejecutarlo: `Unblock-File -LiteralPath .\Install-LocalMIPScanner.ps1`.
 
-Por defecto obtiene la rama `main`. Para probar específicamente las correcciones del PR #4 antes de fusionarlas, indica `-Ref fix/localmipscanner-m2-module-reload-pr4`. Para instalar sin preguntas y desbloquear automáticamente los scripts de la raíz y `tests`:
+Por defecto obtiene la rama `main`. Para probar M2.1 antes de integrar el PR, instala desde la rama de pruebas.
 
 ~~~powershell
-.\Install-LocalMIPScanner.ps1 -Destination 'C:\Deploy\LocalMIPScanner' -Ref main -Unblock -NoPrompt
+.\Install-LocalMIPScanner.ps1 -Destination 'C:\Deploy\LocalMIPScanner' -Ref feat/localmipscanner-m2.1 -Unblock -NoPrompt
 ~~~
 
 El instalador no requiere Git ni permisos elevados. Resuelve el commit en GitHub y obtiene su árbol para inventariar **todos** los archivos de `LocalMIPScanner`, incluidos `Config`, scripts, módulos y pruebas. Compara cada archivo con el hash de objeto Git del repositorio (SHA-1 calculado sobre `blob <length>\0 + contenido`); los archivos intactos no se descargan nuevamente. Todas las descargas se guardan temporalmente y se verifican contra el hash publicado por GitHub antes de instalarse. La conexión utiliza HTTPS. El instalador guarda la revisión y los hashes en `.localmipscanner-install.json`.
@@ -40,71 +40,72 @@ Get-Content -LiteralPath $resultado.logFile | ConvertFrom-Json |
 
 Puedes pasar varias raíces con -Root 'C:\Datos', 'D:\Proyectos'. Se requieren rutas absolutas en unidades locales. Las rutas UNC, unidades de red y raíces con puntos de reanálisis en su ruta quedan fuera del alcance. Durante el recorrido se omiten los puntos de reanálisis, incluidas las uniones de directorios, y los archivos marcados como Offline. Esto puede excluir carpetas y archivos de OneDrive, incluso si algunos están disponibles en el equipo. Un error en una raíz o carpeta se registra y el recorrido continúa con las demás. Si no se puede escribir el registro, la ejecución falla.
 
+### Modos de ejecución M2.1
+
+- Una invocación sin límites completa una generación. Si encuentra una generación activa, continúa desde el primer directorio pendiente. Si ya encuentra un marcador end, consolida esa generación y devuelve su resumen.
+- `-MaxDirectories` y `-MaxSeconds` limitan el trabajo por invocación. Cero desactiva el límite correspondiente. Los límites se comprueban tras cada checkpoint. Un directorio grande puede superar el tiempo indicado, y la carga, reanudación y consolidación se miden aparte.
+- `-Continuous` repite invocaciones y espera `-IdleSeconds` entre ellas (60 por defecto). Cada pasada emite su propio resumen y libera el bloqueo antes de esperar. Con enabled en false se puede repetir el inventario M1 completo. Los límites por directorio y tiempo requieren estado incremental.
+
+~~~powershell
+.\Invoke-LocalMIPScanner.ps1 -Root 'C:\Datos\Piloto' -MaxDirectories 50 -MaxSeconds 120
+.\Invoke-LocalMIPScanner.ps1 -Root 'C:\Datos\Piloto' -Continuous -MaxSeconds 120 -IdleSeconds 60
+~~~
+
+El resumen incluye generation, generationComplete, directoriesCompleted, resumedDirectories, generationHasErrors y recoveredIndex. Los contadores de archivos representan el trabajo de esa invocación. deletedFiles corresponde a la consolidación de toda la generación. Si se interrumpe una invocación, puede quedar un registro de auditoría sin summary y repetirse eventos del último directorio al reanudar.
+
 ## Configuración
 
-Usa los archivos de Config o pasa -ConfigDirectory con una copia para el piloto.
+Usa los archivos de Config o pasa `-ConfigDirectory` con una copia para el piloto.
 
 | Archivo | Qué controla |
 | --- | --- |
-| [extensions.json](Config/extensions.json) | Lista de extensiones exactas con punto inicial. La comparación ignora mayúsculas y minúsculas. |
-| [exclusions.json](Config/exclusions.json) | Lista de carpetas absolutas y todos sus descendientes. Admite variables de entorno como %SystemRoot%. |
-| [incremental.json](Config/incremental.json) | Activa el índice, el límite de tamaño, la caducidad de clasificación futura y la detección de eliminaciones. |\n| [performance.json](Config/performance.json) | Pausa de pauseMilliseconds (0 a 10 000) cada batchSize entradas enumeradas (1 a 10 000). El recorrido es secuencial y escribe registros conforme avanza. |
+| [extensions.json](Config/extensions.json) | Extensiones exactas con punto inicial. La comparación ignora mayúsculas y minúsculas. |
+| [exclusions.json](Config/exclusions.json) | Carpetas absolutas y sus descendientes. Admite variables de entorno como %SystemRoot%. |
+| [incremental.json](Config/incremental.json) | Estado incremental, carpeta de estado, tamaño máximo, detección de cambios y eliminaciones, y vigencia de una clasificación futura. |
+| [performance.json](Config/performance.json) | Pausa de pauseMilliseconds (0 a 10 000) cada batchSize entradas enumeradas (1 a 10 000). El recorrido es secuencial. |
 
-M2 guarda el índice en `%LOCALAPPDATA%\\LocalMIPScanner\\State\\inventory-state.jsonl` (configurable). Se excluye automáticamente la carpeta del índice. Una instancia concurrente con el mismo índice se rechaza mediante bloqueo exclusivo. La escritura usa un archivo temporal y reemplazo atómico dentro del mismo volumen. Los documentos no se modifican.
+El estado y los logs se guardan por defecto en %LOCALAPPDATA%\LocalMIPScanner\State y %LOCALAPPDATA%\LocalMIPScanner\Logs. Ambas carpetas se excluyen del recorrido incremental. Usa una carpeta de estado en NTFS local bajo control de la cuenta que ejecuta el scanner. Los logs, el índice y el journal contienen rutas completas. Cada invocación crea un archivo de log y su retención es manual.
 
-En la primera ejecución, `newFiles` registra archivos no vistos; en la segunda, `unchangedFiles` registra archivos con mismo tamaño y fecha de modificación. Las acciones `new`, `modified`, `unchanged` y `due` se añaden al campo `decision` de cada evento `file`. `deleted` se emite únicamente al completar el recorrido sin errores de enumeración. Un archivo Offline se excluye de ese cálculo. Los archivos mayores que `maxFileSizeMB` generan `skip` y `oversizedFiles`.
+Las decisiones new, modified, unchanged y due se registran en los eventos file. Se compara tamaño y fecha de escritura, por lo que un cambio que preserve ambos atributos puede pasar inadvertido. Los registros siguen en PendingClassification. Los eventos deleted se refieren a entradas del índice y se emiten tras publicar una generación completa sin errores. La revisión [del diseño y la recuperación](ARCHITECTURE.md#estado-incremental-m21) describe el tratamiento de errores y exclusiones.
 
-**Importante:** M2 no inspecciona contenido ni aplica etiquetas. `lastContentScannedUtc` permanece nulo y `pendingClassification` describe trabajo futuro. `rescanIntervalDays` solo aplica a entradas que tengan una fecha de clasificación real en hitos posteriores. No se obtiene todavía ahorro sustancial de enumeración de directorios: se recorre el árbol igualmente. La detección basada en tamaño y fecha no detecta necesariamente una modificación que preserve ambos atributos. Eliminar un archivo de un alcance más estrecho no lo elimina del índice; el estado conserva los registros fuera del alcance actual.
+### Actualizar desde M2 o cambiar el alcance
 
-Cada ejecución guarda un archivo JSONL en %LOCALAPPDATA%\LocalMIPScanner\Logs. Puedes cambiar el destino con -LogDirectory. El recorrido omite automáticamente ese directorio. El archivo contiene eventos start, file, error y summary. El resumen cuenta entradas visitadas, archivos inventariados, exclusiones, puntos de reanálisis, archivos Offline y errores, e incluye el tiempo transcurrido en milisegundos. Un registro sin summary corresponde a una ejecución incompleta. Los registros incluyen rutas completas y mensajes de error. Se conservan localmente hasta que se eliminen.
+En el primer arranque, M2.1 valida y migra `inventory-state.jsonl` si existe. El archivo de M2 queda disponible para una vuelta a la versión anterior. M2.1 mantiene `inventory.index.jsonl`, `inventory.active.jsonl` y un único backup rotativo `inventory.index.backup`. Si el índice principal falla la validación y el backup es válido, restaura el backup. Si ambas copias fallan, conserva los archivos para diagnóstico y termina con error.
 
-## Pruebas
+Si cambias raíces, filtros u opciones de detección mientras hay un journal pendiente, termina primero la generación con los parámetros originales. Si quieres reiniciar el recorrido con el alcance nuevo, detén el scanner y archiva `inventory.active.jsonl` fuera de la carpeta de estado. El siguiente arranque parte del último índice confirmado. El mismo procedimiento permite volver al índice confirmado si el journal tiene corrupción en registros completos. Las pausas y límites de ejecución se pueden ajustar entre invocaciones de la misma generación.
+
+## Programador de tareas de Windows
+
+Para un piloto, configura una tarea bajo la cuenta del usuario que puede leer las raíces, con la misma carpeta de estado y configuración en cada ejecución. La acción puede usar como programa C:\Program Files\PowerShell\7\pwsh.exe y los argumentos siguientes, ajustados a la instalación.
+
+~~~text
+-NoProfile -NonInteractive -File "C:\Deploy\LocalMIPScanner\Invoke-LocalMIPScanner.ps1" -Root "C:\Datos\Piloto" -MaxDirectories 50 -MaxSeconds 120
+~~~
+
+Para ejecutar por ventanas, usa un desencadenador periódico y la opción de omitir instancias nuevas mientras la tarea siga en ejecución (IgnoreNew). Para ejecución continua, usa un desencadenador al iniciar sesión y añade `-Continuous` `-IdleSeconds` 60. Revisa el límite total de ejecución de la tarea para el modo continuo. Los niveles de prioridad 7 y 8 están destinados al trabajo en segundo plano. Para varias raíces desde la tarea, usa un script de entrada que llame al scanner con un arreglo -Root. [Configuración de tareas en Microsoft Learn](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtasksettingsset?view=windowsserver2025-ps).
+
+## Pruebas de M2.1
+
+Desde el directorio LocalMIPScanner, ejecuta cada prueba en un proceso PowerShell independiente sobre archivos sintéticos.
 
 ~~~powershell
 pwsh -NoProfile -File .\tests\Test-Inventory.ps1
+pwsh -NoProfile -File .\tests\Test-Incremental.ps1
+pwsh -NoProfile -File .\tests\Test-StateFormat.ps1
+pwsh -NoProfile -File .\tests\Test-Checkpoint.ps1
+pwsh -NoProfile -File .\tests\Test-Restart.ps1
+pwsh -NoProfile -File .\tests\Measure-Inventory.ps1 -FileCount 3000
 ~~~
 
-La prueba usa archivos sintéticos, uniones de directorio y una carpeta temporal con permiso de listado denegado. Verifica filtrado por extensión, exclusiones por carpeta, raíces solapadas, puntos de reanálisis, recuperación ante errores, integridad de un archivo, registros separados y validación de configuración. Requiere un directorio temporal en un volumen NTFS local.
+| Prueba | Cobertura |
+| --- | --- |
+| Test-Inventory | M1, extensiones, exclusiones, raíces solapadas, uniones, errores de acceso e integridad de los documentos. |
+| Test-Incremental | Nuevos, modificados, sin cambios y eliminados, recarga de estado y eventos de auditoría. |
+| Test-StateFormat | Formato de fechas ISO, tamaños Int64 y rechazo de tamaños inválidos. |
+| Test-Checkpoint | Migración, alcance, escritor concurrente, cola truncada, checksum corrupto, fallo de publicación, replay del end, backup único y recuperación. |
+| Test-Restart | Terminación forzada de un proceso Windows a mitad de un directorio, seguida de una reanudación desde el checkpoint anterior. |
+| Measure-Inventory | Tres pasadas M1/M2.1 en un mismo proceso. Registra tiempo de pared, CPU, memoria pico acumulada, bytes de estado/log y tiempos de carga/consolidación. |
 
-Validado en Windows con PowerShell 7.6.9. Tres recorridos con la configuración de serie inventariaron 3 000 archivos TXT sintéticos por ejecución, con cero errores y tiempos de 2,74 a 4,16 segundos. La medición cubre el inventario de metadatos en este equipo.
+En Windows con NTFS y PowerShell 7.6.9 pasaron las cinco pruebas. En una medición local con 3 000 archivos, M1 tardó 4,0 s, M2.1 inicial 13,4 s y M2.1 sin cambios 11,2 s. Los tiempos de CPU fueron 5,3 s, 22,3 s y 13,3 s, respectivamente. El pico acumulado del proceso fue de 145,6 MiB. Son resultados de una muestra sintética en un único equipo.
 
-Consulta [la revisión del script, la investigación de Microsoft y los hitos siguientes](ARCHITECTURE.md).
-
-## Pruebas recomendadas en Windows 365 (M2)
-
-~~~powershell
-$first = .\\Invoke-LocalMIPScanner.ps1 -Root 'C:\\'
-$first | Format-List
-$second = .\\Invoke-LocalMIPScanner.ps1 -Root 'C:\\'
-$second | Format-List
-Get-Content -LiteralPath $second.logFile | ConvertFrom-Json |
-    Where-Object event -eq 'error'
-~~~
-
-Es esperable que la enumeración completa continúe tardando varios minutos. Comparar `newFiles`, `unchangedFiles`, `modifiedFiles`, `stateLoadMilliseconds`, `enumerationMilliseconds` y `stateSaveMilliseconds`. No ejecutar sobre un perfil de usuario productivo con datos sensibles antes de revisar los filtros y la retención del registro de rutas.
-
-### Actualización de M1 a M2: recarga del módulo
-
-Si ejecutaste M1 y luego actualizaste a M2 en la misma sesión de PowerShell, el módulo anterior puede permanecer en memoria. El punto de entrada usa ahora `Import-Module -Force`. Se recomienda ejecutar los tests en procesos PowerShell independientes y nuevos:
-
-~~~powershell
-pwsh -NoProfile -File .\\tests\\Test-Inventory.ps1
-pwsh -NoProfile -File .\\tests\\Test-Incremental.ps1
-~~~
-
-Comprueba que el resumen contiene `newFiles`, `unchangedFiles` y `stateLoadMilliseconds` antes de recorrer `C:\\`.
-
-### M2: diagnóstico de archivos de prueba bloqueados
-
-Si `Test-Incremental.ps1` informa un archivo `inventory-*.jsonl` abierto durante la limpieza, actualiza a la revisión que contiene la corrección de cierre de recursos. Antes de fusionar este PR, usa el instalador con `-Ref fix/localmipscanner-m2-cleanup-pr5`. La prueba ahora intenta limpiar su carpeta temporal varias veces, pero no sustituye el error original por un fallo de limpieza. Si se produce otra excepción, adjunta el **primer error** mostrado y su línea. Evita borrar manualmente archivos de pruebas que sigan siendo utilizados por procesos activos.
-
-~~~powershell
-.\\Install-LocalMIPScanner.ps1 -Ref fix/localmipscanner-m2-cleanup-pr5 -Unblock -NoPrompt
-pwsh -NoProfile -File .\\tests\\Test-Incremental.ps1
-~~~
-
-### M2: compatibilidad del índice JSONL (PR #6)
-
-El tamaño `sizeBytes` es un número entero JSON; al leerlo con `ConvertFrom-Json -AsHashtable`, PowerShell puede materializarlo como `Int32` o `Int64` según el valor. El cargador M2 ahora acepta ambos y los normaliza a `Int64`, sin admitir valores negativos, fraccionarios ni texto. Esto corrige el error `Invalid incremental state entry` al repetir un escaneo con archivos pequeños.
-
-Para validar la corrección antes de su integración, actualiza explícitamente desde `-Ref fix/localmipscanner-m2-state-numeric-types-pr6` y ejecuta los dos tests en consolas independientes. No elimines manualmente el índice de producción; para el test se genera uno sintético en una carpeta temporal.
+Para la validación posterior en Windows 365, ejecuta las pruebas y luego configura la tarea con una raíz de prueba pequeña. Interrumpe la tarea en una primera pasada, reinicia el equipo y confirma que continúe la misma generación. Registra CPU, memoria, actividad de disco y latencia del equipo con aplicaciones de usuario abiertas. En una VM desechable, prueba también un corte de energía durante la publicación del índice y verifica la recuperación de la copia validada. La terminación del proceso en Test-Restart no reproduce un corte eléctrico. La tarea programada, Windows 365 y el corte de energía quedan pendientes de esa validación.

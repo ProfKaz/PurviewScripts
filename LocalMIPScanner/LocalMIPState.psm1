@@ -9,24 +9,6 @@ function ConvertTo-LocalPath {
     return [IO.Path]::TrimEndingDirectorySeparator([IO.Path]::GetFullPath($expanded))
 }
 
-function Assert-OrdinaryDirectory {
-    param([string] $Path)
-    $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($Path))
-    if ($drive.DriveType -notin 'Fixed', 'Removable', 'Ram') { throw "Unsupported drive type: $($drive.DriveType)" }
-    $ancestors = [Collections.Generic.Stack[string]]::new()
-    for ($current = [IO.DirectoryInfo]::new($Path); $null -ne $current; $current = $current.Parent) {
-        $ancestors.Push($current.FullName)
-    }
-    foreach ($ancestor in $ancestors) {
-        $attr = [IO.File]::GetAttributes($ancestor)
-        if (($attr -band [IO.FileAttributes]::Directory) -eq 0 -or
-            ($attr -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-            throw "Expected a directory without reparse points in its path: $ancestor"
-        }
-    }
-}
-
-
 function Get-IncrementalSettings {
     param([string] $ConfigDirectory)
     $file = Join-Path $ConfigDirectory 'incremental.json'
@@ -54,74 +36,6 @@ function Get-IncrementalSettings {
         Days = $raw['rescanIntervalDays']
         MaxBytes = $raw['maxFileSizeMB'] * 1MB
         StateDirectory = ConvertTo-LocalPath $raw['stateDirectory']
-    }
-}
-
-function Open-IncrementalState {
-    param([hashtable] $Settings)
-    $directory = $Settings.StateDirectory
-    $existing = [IO.DirectoryInfo]::new($directory)
-    while (-not $existing.Exists -and $null -ne $existing.Parent) { $existing = $existing.Parent }
-    Assert-OrdinaryDirectory $existing.FullName
-    [void][IO.Directory]::CreateDirectory($directory)
-    Assert-OrdinaryDirectory $directory
-
-    # FileShare.None prevents simultaneous writers; the handle stays open until the run finishes.
-    $lock = [IO.FileStream]::new((Join-Path $directory 'inventory.lock'),
-        [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
-    try {
-        $entries = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::OrdinalIgnoreCase)
-        $file = Join-Path $directory 'inventory-state.jsonl'
-        if ([IO.File]::Exists($file)) {
-            foreach ($line in [IO.File]::ReadLines($file)) {
-                if ([string]::IsNullOrWhiteSpace($line)) { continue }
-                $item = ConvertFrom-Json -InputObject $line -AsHashtable -ErrorAction Stop
-                # ConvertFrom-Json can return Int32 for small numbers and Int64
-                # for larger ones. Neither JSON nor the state schema guarantees
-                # a particular CLR integer width.
-                $sizeValue = $item['sizeBytes']
-                $integerType = $null -ne $sizeValue -and
-                    $sizeValue.GetType().FullName -in @(
-                        'System.Byte', 'System.SByte', 'System.Int16', 'System.UInt16',
-                        'System.Int32', 'System.UInt32', 'System.Int64', 'System.UInt64'
-                    )
-                $parsedSize = [long] 0
-                if ($integerType) {
-                    try { $parsedSize = [long] $sizeValue }
-                    catch [OverflowException] { $integerType = $false }
-                }
-                if ($item['schemaVersion'] -ne 1 -or
-                    $item['path'] -isnot [string] -or
-                    [string]::IsNullOrWhiteSpace($item['path']) -or
-                    -not $integerType -or $parsedSize -lt 0 -or
-                    $item['lastWriteUtc'] -isnot [string]) {
-                    throw "Invalid incremental state entry in $file"
-                }
-                $item['sizeBytes'] = $parsedSize
-                $entries[$item['path']] = $item
-            }
-        }
-        return @{ Entries = $entries; File = $file; Lock = $lock }
-    } catch {
-        $lock.Dispose()
-        throw
-    }
-}
-
-function Save-IncrementalState {
-    param([hashtable] $State)
-    $tempFile = $State.File + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
-    try {
-        $writer = [IO.StreamWriter]::new($tempFile, $false, [Text.UTF8Encoding]::new($false))
-        try {
-            foreach ($entry in $State.Entries.Values) {
-                $writer.WriteLine((ConvertTo-Json -InputObject $entry -Compress -Depth 8))
-            }
-        } finally { $writer.Dispose() }
-        # Rename within the same directory; a failed write leaves the previous snapshot intact.
-        [IO.File]::Move($tempFile, $State.File, $true)
-    } finally {
-        if ([IO.File]::Exists($tempFile)) { [IO.File]::Delete($tempFile) }
     }
 }
 
@@ -156,4 +70,4 @@ function Get-FileInventoryDecision {
     return 'unchanged'
 }
 
-Export-ModuleMember -Function Get-IncrementalSettings, Open-IncrementalState, Save-IncrementalState, Get-FileInventoryDecision
+Export-ModuleMember -Function Get-IncrementalSettings, Get-FileInventoryDecision
