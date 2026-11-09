@@ -1,5 +1,32 @@
 Set-StrictMode -Version Latest
 
+function ConvertTo-LocalPath {
+    param([string] $Path)
+    $expanded = [Environment]::ExpandEnvironmentVariables($Path)
+    if ($expanded -notmatch '^[A-Za-z]:[\\/]' -or $expanded.Substring(2).Contains(':')) {
+        throw "Expected an absolute Windows drive path: $Path"
+    }
+    return [IO.Path]::TrimEndingDirectorySeparator([IO.Path]::GetFullPath($expanded))
+}
+
+function Assert-OrdinaryDirectory {
+    param([string] $Path)
+    $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($Path))
+    if ($drive.DriveType -notin 'Fixed', 'Removable', 'Ram') { throw "Unsupported drive type: $($drive.DriveType)" }
+    $ancestors = [Collections.Generic.Stack[string]]::new()
+    for ($current = [IO.DirectoryInfo]::new($Path); $null -ne $current; $current = $current.Parent) {
+        $ancestors.Push($current.FullName)
+    }
+    foreach ($ancestor in $ancestors) {
+        $attr = [IO.File]::GetAttributes($ancestor)
+        if (($attr -band [IO.FileAttributes]::Directory) -eq 0 -or
+            ($attr -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Expected a directory without reparse points in its path: $ancestor"
+        }
+    }
+}
+
+
 function Get-IncrementalSettings {
     param([string] $ConfigDirectory)
     $file = Join-Path $ConfigDirectory 'incremental.json'
