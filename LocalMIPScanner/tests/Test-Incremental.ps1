@@ -57,5 +57,23 @@ try {
     Assert-Value 'summary' $lastEvents[-1].event 'Final summary event'
     'PASS: M2 first, repeat, changed, added, deleted, state integrity and JSONL summary'
 } finally {
-    if ([IO.Directory]::Exists($fixture)) { [IO.Directory]::Delete($fixture, $true) }
+    # A cleanup failure must not conceal an earlier assertion or scanner exception.
+    # Short retries tolerate transient Windows file indexing/antivirus handles.
+    if ([IO.Directory]::Exists($fixture)) {
+        $cleaned = $false
+        for ($attempt = 1; $attempt -le 5; $attempt++) {
+            try {
+                [IO.Directory]::Delete($fixture, $true)
+                $cleaned = $true
+                break
+            } catch [IO.IOException] {
+                if ($attempt -lt 5) { Start-Sleep -Milliseconds 200 }
+            } catch [UnauthorizedAccessException] {
+                if ($attempt -lt 5) { Start-Sleep -Milliseconds 200 }
+            }
+        }
+        if (-not $cleaned) {
+            Write-Warning "Could not delete test fixture $fixture; check for an open file handle. Test assertions are preserved."
+        }
+    }
 }
