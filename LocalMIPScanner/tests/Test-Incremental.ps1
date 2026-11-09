@@ -36,6 +36,15 @@ try {
     Assert-Value 2 $first.newFiles 'First run new'
     Assert-Value 0 $first.errors 'First run errors'
     Assert-Value 2 $first.pendingClassification 'First run pending'
+    $firstState = @(Get-Content -LiteralPath (Join-Path $state 'inventory-state.jsonl') |
+        Where-Object { $_ } | ConvertFrom-Json)
+    Assert-Value 2 $firstState.Count 'Persisted initial state count'
+    foreach ($record in $firstState) {
+        Assert-Value 1 $record.schemaVersion 'Persisted state schema version'
+        if ($record.sizeBytes -lt 0) { throw 'Invalid negative persisted size' }
+    }
+    # Reloading this state on the second run is a regression test for JSON
+    # Int32/Int64 numeric normalization when files are small.
     $second = & $scanner @params
     Assert-Value 0 $second.newFiles 'Second run new'
     Assert-Value 2 $second.unchangedFiles 'Second run unchanged'
