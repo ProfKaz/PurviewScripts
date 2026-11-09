@@ -57,7 +57,7 @@ function Get-SafeDestination {
     param([string] $Relative)
     if (-not (Test-ManagedPath $Relative)) { throw "Unsafe repository path: $Relative" }
     $full = [IO.Path]::GetFullPath((Join-Path $destinationRoot ($Relative.Replace('/', [IO.Path]::DirectorySeparatorChar))))
-    if (-not $full.StartsWith(($destinationRoot.TrimEnd('\','/') + [IO.Path]::DirectorySeparatorChar),
+    if (-not $full.StartsWith(($destinationRoot.TrimEnd([char[]]@('\','/')) + [IO.Path]::DirectorySeparatorChar),
         [StringComparison]::OrdinalIgnoreCase)) {
         throw "Repository path escapes destination: $Relative"
     }
@@ -99,7 +99,7 @@ $tree = Invoke-RestMethod -Uri ($api + '/git/trees/' + $treeSha + '?recursive=1'
 if ($tree.truncated) { throw 'GitHub tree was truncated. Refusing an incomplete installation.' }
 $files = @($tree.tree | Where-Object {
     $_.type -eq 'blob' -and $_.path.StartsWith($sourcePrefix, [StringComparison]::Ordinal) -and
-    $_.mode -eq '100644'
+    $_.mode -in @('100644','100755')
 } | Sort-Object path)
 if ($files.Count -eq 0) { throw 'No files found in LocalMIPScanner at selected ref.' }
 
