@@ -2,6 +2,31 @@
 
 M1 genera un inventario local en modo auditoría. M2 añade estado incremental persistente para distinguir archivos nuevos, modificados y sin cambios, sin leer su contenido. Lee rutas, extensiones, tamaños y fechas de modificación. Funciona en Windows con PowerShell 7.2 o posterior y con los permisos de la cuenta que lo ejecuta. Este hito solo inspecciona metadatos del sistema de archivos y escribe sus propios registros.
 
+## Instalador / actualizador desde GitHub
+
+Descarga [Install-LocalMIPScanner.ps1](Install-LocalMIPScanner.ps1) y colócalo en la carpeta de destino (por ejemplo, `C:\Deploy\LocalMIPScanner`). En PowerShell 7.2+:
+
+~~~powershell
+cd C:\Deploy\LocalMIPScanner
+.\Install-LocalMIPScanner.ps1
+~~~
+
+Si el instalador fue descargado mediante un navegador y Windows lo bloquea, puedes desbloquear **solo el instalador** antes de ejecutarlo: `Unblock-File -LiteralPath .\Install-LocalMIPScanner.ps1`.
+
+Por defecto obtiene la rama `feature/localmipscanner-m2-incremental` durante la validación de M2. Una vez integrado el PR, usa `-Ref main`. Para instalar sin preguntas y desbloquear automáticamente los scripts de la raíz y `tests`:
+
+~~~powershell
+.\Install-LocalMIPScanner.ps1 -Destination 'C:\Deploy\LocalMIPScanner' -Ref feature/localmipscanner-m2-incremental -Unblock -NoPrompt
+~~~
+
+El instalador no requiere Git ni permisos elevados. Resuelve el commit en GitHub y obtiene su árbol para inventariar **todos** los archivos de `LocalMIPScanner`, incluidos `Config`, scripts, módulos y pruebas. Compara cada archivo con el hash de objeto Git del repositorio (SHA-1 calculado sobre `blob <length>\0 + contenido`); los archivos intactos no se descargan nuevamente. Todas las descargas se guardan temporalmente y se verifican contra el hash publicado por GitHub antes de instalarse. La conexión utiliza HTTPS. El instalador guarda la revisión y los hashes en `.localmipscanner-install.json`.
+
+Si una configuración existente difiere de la versión del repositorio, se **respalda y reemplaza** con la versión oficial; las copias quedan en `.installer-backups` con fecha e identificador único. Si el manifiesto anterior incluye archivos que ya no existen en la revisión nueva, solo se archivan automáticamente cuando su contenido coincide con el hash previamente instalado; archivos obsoletos modificados por el usuario se conservan y se advierten. Los archivos ajenos a la instalación nunca se eliminan. El estado del scanner en `%LOCALAPPDATA%` no se borra.
+
+El instalador ofrece al final desbloquear, de una sola vez, los `.ps1` y `.psm1` de la raíz y de `tests`. La respuesta predeterminada es **No**. `-Unblock` acepta explícitamente el desbloqueo; `-NoPrompt` evita la pregunta y no desbloquea nada salvo que también se pase `-Unblock`.
+
+**Seguridad y limitaciones:** revisa el instalador antes de ejecutarlo y evita cambiar `-Ref` a ramas no confiables. La integridad por hash protege contra descargas incompletas, pero no autentica al autor de la rama: GitHub y el repositorio siguen siendo el origen de confianza. La instalación realiza descargas verificadas antes de reemplazar archivos, pero el conjunto completo de archivos no constituye una transacción atómica. En caso de interrupción, vuelve a ejecutar el instalador. Requiere acceso de salida a `api.github.com` y `raw.githubusercontent.com`; la API pública de GitHub aplica límites de tasa. No se ha ejecutado todavía una validación end-to-end del instalador en Windows 365.
+
 ## Ejecutar
 
 Desde la carpeta LocalMIPScanner, ejecuta en PowerShell 7. Sustituye la ruta por una carpeta local existente, de preferencia con datos de prueba.
