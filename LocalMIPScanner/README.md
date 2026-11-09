@@ -93,3 +93,12 @@ pwsh -NoProfile -File .\\tests\\Test-Incremental.ps1
 ~~~
 
 Comprueba que el resumen contiene `newFiles`, `unchangedFiles` y `stateLoadMilliseconds` antes de recorrer `C:\\`.
+
+### M2: diagnóstico de archivos de prueba bloqueados
+
+Si `Test-Incremental.ps1` informa un archivo `inventory-*.jsonl` abierto durante la limpieza, actualiza a la revisión que contiene la corrección de cierre de recursos. Antes de fusionar este PR, usa el instalador con `-Ref fix/localmipscanner-m2-cleanup-pr5`. La prueba ahora intenta limpiar su carpeta temporal varias veces, pero no sustituye el error original por un fallo de limpieza. Si se produce otra excepción, adjunta el **primer error** mostrado y su línea. Evita borrar manualmente archivos de pruebas que sigan siendo utilizados por procesos activos.
+
+~~~powershell
+.\\Install-LocalMIPScanner.ps1 -Ref fix/localmipscanner-m2-cleanup-pr5 -Unblock -NoPrompt
+pwsh -NoProfile -File .\\tests\\Test-Incremental.ps1
+~~~
