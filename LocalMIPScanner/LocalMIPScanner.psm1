@@ -115,7 +115,7 @@ function Invoke-LocalMIPInventory {
 
     $runId = [guid]::NewGuid().ToString('N')
     $logFile = Join-Path $logPath "inventory-$runId.jsonl"
-    $writer = [IO.StreamWriter]::new($logFile, $false)
+    $writer = $null
     $summary = [ordered] @{
         event = 'summary'
         runId = $runId
@@ -140,11 +140,6 @@ function Invoke-LocalMIPInventory {
     $timer = [Diagnostics.Stopwatch]::StartNew()
     $state = $null
     $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-    if ($incremental.Enabled) {
-        $stateTimer = [Diagnostics.Stopwatch]::StartNew()
-        $state = Open-IncrementalState $incremental
-        $summary.stateLoadMilliseconds = $stateTimer.ElapsedMilliseconds
-    }
     $completedRoots = [Collections.Generic.List[string]]::new()
     $pending = [Collections.Generic.Stack[string]]::new()
     $options = [IO.EnumerationOptions]::new()
@@ -152,6 +147,14 @@ function Invoke-LocalMIPInventory {
     $options.IgnoreInaccessible = $false
 
     try {
+        # Keep both the state lock and the log writer inside the same protected scope.
+        # Failure opening the state must never leak a locked JSONL file.
+        if ($incremental.Enabled) {
+            $stateTimer = [Diagnostics.Stopwatch]::StartNew()
+            $state = Open-IncrementalState $incremental
+            $summary.stateLoadMilliseconds = $stateTimer.ElapsedMilliseconds
+        }
+        $writer = [IO.StreamWriter]::new($logFile, $false)
         Write-InventoryEvent $writer ([ordered] @{
             event = 'start'
             schemaVersion = 1
@@ -321,7 +324,7 @@ function Invoke-LocalMIPInventory {
         $summary.elapsedMilliseconds = $timer.ElapsedMilliseconds
         Write-InventoryEvent $writer $summary
     } finally {
-        $writer.Dispose()
+        if ($null -ne $writer) { $writer.Dispose() }
         if ($null -ne $state) { $state.Lock.Dispose() }
     }
 
