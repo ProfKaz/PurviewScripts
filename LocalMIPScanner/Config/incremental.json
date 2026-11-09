@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "rescanIntervalDays": 30,
+  "detectModifiedFiles": true,
+  "detectDeletedFiles": true,
+  "forceFullScan": false,
+  "maxFileSizeMB": 100,
+  "stateDirectory": "%LOCALAPPDATA%\\LocalMIPScanner\\State"
+}
