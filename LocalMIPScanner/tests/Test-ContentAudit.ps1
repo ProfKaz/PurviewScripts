@@ -64,6 +64,7 @@ try {
         Assert-Equal 1 $hits.Count 'One matching file per format'
         $expected = if ($run -eq $first) { 2 } else { 1 }
         Assert-Equal $expected $hits[0].matchesByRule.'test-marker' 'Only match counts recorded'
+        Assert-Equal (Get-FileHash -LiteralPath $hits[0].path).Hash $hits[0].sha256 'Audit fingerprint binds findings to source bytes'
     }
 
     $repeat = & $scanner @params -AuditContent

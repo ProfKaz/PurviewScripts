@@ -1,0 +1,13 @@
+{
+  "tenantId": "00000000-0000-0000-0000-000000000000",
+  "clientId": "00000000-0000-0000-0000-000000000000",
+  "roots": ["C:\\Datos\\PilotoM3"],
+  "rules": [
+    {
+      "ruleId": "synthetic-pilot-id",
+      "sitId": "00000000-0000-0000-0000-000000000000",
+      "confidence": 85
+    }
+  ],
+  "maxFiles": 50
+}

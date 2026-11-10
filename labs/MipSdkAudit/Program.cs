@@ -3,20 +3,27 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Identity.Client;
+using Microsoft.Identity.Client.Broker;
 using Microsoft.InformationProtection;
 using Microsoft.InformationProtection.File;
 using Microsoft.InformationProtection.Policy;
+using Microsoft.InformationProtection.Policy.Actions;
 
 if (args is ["--help"] or [])
 {
     Console.WriteLine("MipSdkAudit <tenant-guid> <client-guid> <test-user-upn> [sit-guid]");
+    Console.WriteLine("MipSdkAudit --check-sso <config.json>");
+    Console.WriteLine("MipSdkAudit --config <config.json> --audit-log <inventory.jsonl>");
     Console.WriteLine("MipSdkAudit --self-test");
     return 0;
 }
 
 bool selfTest = args is ["--self-test"];
+bool checkSso = args is ["--check-sso", _];
+bool auditLog = args is ["--config", _, "--audit-log", _];
+bool silentMode = checkSso || auditLog;
 Guid tenantId = default, clientId = default, sitId = default;
-if (!selfTest && (args.Length is < 3 or > 4 ||
+if (!selfTest && !silentMode && (args.Length is < 3 or > 4 ||
     !Guid.TryParse(args[0], out tenantId) || tenantId == Guid.Empty ||
     !Guid.TryParse(args[1], out clientId) || clientId == Guid.Empty ||
     !args[2].Contains('@') || args[2].Any(char.IsWhiteSpace) ||
@@ -32,16 +39,37 @@ if (!OperatingSystem.IsWindows() || RuntimeInformation.ProcessArchitecture != Ar
     return 2;
 }
 
-var stage = "createFixture";
+var stage = "readConfiguration";
 DirectoryInfo? fixture = null;
 LabAuth? auth = null;
+LabConsent? consent = null;
 try
 {
+    AuditSettings? settings = silentMode ? AuditSettings.Read(args[1]) : null;
+    stage = "readAuditLog";
+    List<AuditCandidate> candidates = auditLog ? AuditCandidate.ReadLog(args[3], settings!) : [];
+    if (auditLog && candidates.Count == 0)
+    {
+        Emit(new { @event = "auditSummary", candidates = 0, evaluated = 0, failed = 0 });
+        return 0;
+    }
+    if (settings is not null)
+    {
+        tenantId = settings.TenantId;
+        clientId = settings.ClientId;
+    }
+
+    stage = "createFixture";
     fixture = Directory.CreateTempSubdirectory("LocalMIPScanner-lab-");
     string sample = Path.Combine(fixture.FullName, "synthetic.docx");
-    CreateSample(sample);
-    string hashBefore = HashFile(sample);
-    DateTime writeTimeBefore = System.IO.File.GetLastWriteTimeUtc(sample);
+    string? hashBefore = null;
+    DateTime writeTimeBefore = default;
+    if (!silentMode)
+    {
+        CreateSample(sample);
+        hashBefore = HashFile(sample);
+        writeTimeBefore = System.IO.File.GetLastWriteTimeUtc(sample);
+    }
 
     stage = "initializeSdk";
     MIP.Initialize(MipComponent.File, Path.Combine(AppContext.BaseDirectory, "x64"));
@@ -58,26 +86,38 @@ try
         LoggerDelegateOverride = new LabLogger()
     };
     using var context = MIP.CreateMipContext(configuration);
+    int failed = 0;
     try
     {
         if (selfTest)
         {
             stage = "selfTest";
             VerifySyntheticCallback();
-            Emit(new { @event = "selfTest", nativeSdkInitialized = true, syntheticCallbackPassed = true });
+            VerifyAuditInput(fixture.FullName);
+            _ = new LabAuth(Guid.NewGuid(), Guid.NewGuid(), null, windowsSilent: true);
+            Emit(new { @event = "selfTest", nativeSdkInitialized = true, syntheticCallbackPassed = true, mappedAuditPassed = true });
         }
         else
         {
-            string user = args[2];
-            auth = new LabAuth(tenantId, clientId, user);
+            string? user = settings is null ? args[2] : settings.ExpectedUser;
+            auth = new LabAuth(tenantId, clientId, user, silentMode);
             stage = "loadProfile";
+            consent = new LabConsent(silentMode);
             using var profile = await MIP.LoadFileProfileAsync(
-                new FileProfileSettings(context, CacheStorageType.InMemory, new LabConsent()));
+                new FileProfileSettings(context, CacheStorageType.InMemory, consent));
+            if (silentMode)
+            {
+                stage = "resolveWindowsAccount";
+                // Let the SDK supply the policy service's actual authority and resource.
+                profile.AcquirePolicyAuthToken(Cloud.Commercial, auth);
+                user = auth.AuthenticatedUser ?? throw new InvalidOperationException("Could not resolve the Windows account.");
+                Emit(new { @event = "authentication", mode = "windowsSilent", outcome = "authenticated" });
+            }
             stage = "loadPolicy";
             using var engine = await profile.AddEngineAsync(new FileEngineSettings(
                 Guid.NewGuid().ToString(), auth, "LocalMIPScanner lab", "en-US")
             {
-                Identity = new Identity(user),
+                Identity = new Identity(user!),
                 LoadSensitivityTypes = true
             });
             Emit(new
@@ -88,12 +128,40 @@ try
                 rulePackageCount = engine.SensitivityTypes.Count
             });
 
-            stage = "classifyBaseline";
-            await Classify(engine, sample, "baseline", Guid.Empty);
-            if (sitId != Guid.Empty)
+            if (auditLog)
             {
-                stage = "classifySimulatedMatch";
-                await Classify(engine, sample, "simulatedMatch", sitId);
+                stage = "classifyAuditFindings";
+                foreach (var candidate in candidates)
+                {
+                    try
+                    {
+                        using var stream = candidate.OpenVerified();
+                        await Classify(engine, stream, candidate.Path, "localAudit", new(candidate.Evidence));
+                    }
+                    catch (Exception error) when (error is not OutOfMemoryException)
+                    {
+                        failed++;
+                        Emit(new
+                        {
+                            @event = "auditFileError", path = candidate.Path,
+                            reason = error is AuditInputException ? error.Message : error.GetBaseException().GetType().Name,
+                            authError = auth.ErrorCode
+                        });
+                    }
+                }
+                Emit(new { @event = "auditSummary", candidates = candidates.Count, evaluated = candidates.Count - failed, failed });
+            }
+            else if (!checkSso)
+            {
+                stage = "classifyBaseline";
+                using var stream = System.IO.File.Open(sample, FileMode.Open, FileAccess.Read, FileShare.Read);
+                await Classify(engine, stream, sample, "baseline", new(Guid.Empty));
+                if (sitId != Guid.Empty)
+                {
+                    stage = "classifySimulatedMatch";
+                    using var matchedStream = System.IO.File.Open(sample, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    await Classify(engine, matchedStream, sample, "simulatedMatch", new(sitId));
+                }
             }
         }
     }
@@ -102,6 +170,7 @@ try
         context.ShutDown();
     }
 
+    if (silentMode) return failed == 0 ? 0 : 1;
     stage = "verifyFixture";
     bool unchanged = hashBefore == HashFile(sample) && writeTimeBefore == System.IO.File.GetLastWriteTimeUtc(sample);
     Emit(new { @event = "integrity", sampleUnchanged = unchanged });
@@ -110,7 +179,13 @@ try
 catch (Exception error)
 {
     // Keep exception messages, claims, access tokens and UPNs out of the report.
-    Emit(new { @event = "error", stage, type = error.GetBaseException().GetType().Name, authError = auth?.ErrorCode });
+    Emit(new
+    {
+        @event = "error", stage, type = error.GetBaseException().GetType().Name,
+        reason = error is AuditInputException ? error.Message : null,
+        authError = auth?.ErrorCode,
+        sdkConsentRequired = consent?.DeniedForSilentMode ?? false
+    });
     return 1;
 }
 finally
@@ -120,10 +195,8 @@ finally
     catch (UnauthorizedAccessException) { Console.Error.WriteLine("A temporary SDK fixture could not be removed."); }
 }
 
-static async Task Classify(IFileEngine engine, string path, string scenario, Guid simulatedSit)
+static async Task Classify(IFileEngine engine, Stream stream, string path, string scenario, LabExecutionState state)
 {
-    var state = new LabExecutionState(simulatedSit);
-    using var stream = System.IO.File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read);
     using var handler = await engine.CreateFileHandlerAsync(stream, path,
         isAuditDiscoveryEnabled: false, fileExecutionState: state, isGetSensitivityLabelAuditDiscoveryEnabled: false);
     var actions = await handler.ClassifyAsync();
@@ -131,11 +204,15 @@ static async Task Classify(IFileEngine engine, string path, string scenario, Gui
     {
         @event = "classification",
         scenario,
+        path = scenario == "localAudit" ? path : null,
         callbackCalls = state.CallbackCalls,
         requested = state.Requests.OrderBy(request => request.ClassificationId).Select(request =>
             new { sitId = request.ClassificationId, rulePackageId = request.RulePackageId }),
         simulatedMatchSupplied = state.SimulatedMatchSupplied,
-        actions = actions.Select(action => action.ActionType.ToString()).ToArray()
+        suppliedSits = state.SuppliedSits.Order(),
+        actions = actions.Select(action => action.ActionType.ToString()).ToArray(),
+        recommendedLabelIds = actions.OfType<RecommendLabelAction>().Select(action => action.Label.Id).Distinct().ToArray(),
+        requiredLabelIds = actions.OfType<ApplyLabelAction>().Select(action => action.Label.Id).Distinct().ToArray()
     });
 }
 
@@ -151,6 +228,39 @@ static void VerifySyntheticCallback()
         matches.Count != 1 || matches[request.ClassificationId].Count != 1 ||
         !simulated.SimulatedMatchSupplied || simulated.CallbackCalls != 1 || simulated.Requests.Count != 2)
         throw new InvalidOperationException("Unexpected synthetic callback result.");
+}
+
+static void VerifyAuditInput(string directory)
+{
+    Guid sit = Guid.Parse("28636834-c509-4f55-a433-a72f7660381d");
+    var settings = new AuditSettings(sit, sit, [directory], [new("fixture-rule", sit, 75)]);
+    var path = Path.Combine(directory, "fixture.txt");
+    var log = Path.Combine(directory, "fixture.jsonl");
+    System.IO.File.WriteAllText(path, "synthetic fixture");
+    var runId = Guid.NewGuid();
+    System.IO.File.WriteAllLines(log, new object[]
+    {
+        new { @event = "start", runId },
+        new { @event = "contentAudit", outcome = "completed", path, sha256 = HashFile(path),
+            matchesByRule = new Dictionary<string, int> { ["fixture-rule"] = 2 } },
+        new { @event = "summary", runId }
+    }.Select(row => JsonSerializer.Serialize(row)));
+
+    var candidate = AuditCandidate.ReadLog(log, settings).Single();
+    using (candidate.OpenVerified()) { }
+    var state = new LabExecutionState(candidate.Evidence);
+    var request = new ClassificationRequest { ClassificationId = sit.ToString(), RulePackageId = "fixture" };
+    var supplied = state.GetClassificationResults(null!, [request])[request.ClassificationId];
+    if (supplied.Count != 2 || supplied.ConfidenceLevel != 75 || state.SimulatedMatchSupplied)
+        throw new InvalidOperationException("Mapped audit evidence was not preserved.");
+
+    System.IO.File.WriteAllText(path, "modified fixture");
+    try
+    {
+        using var stale = candidate.OpenVerified();
+        throw new InvalidOperationException("Stale audit evidence was accepted.");
+    }
+    catch (AuditInputException error) when (error.Message == "file_changed_since_audit") { }
 }
 
 static void CreateSample(string path)
@@ -188,11 +298,15 @@ static string HashFile(string path)
 
 static void Emit<T>(T value) => Console.WriteLine(JsonSerializer.Serialize(value));
 
-sealed class LabExecutionState(Guid simulatedSit) : FileExecutionState
+sealed class LabExecutionState(Dictionary<Guid, SitEvidence> evidence, bool simulated = false) : FileExecutionState
 {
+    public LabExecutionState(Guid simulatedSit) : this(simulatedSit == Guid.Empty
+        ? [] : new() { [simulatedSit] = new(1, 85) }, simulatedSit != Guid.Empty) { }
+
     private readonly string scenarioId = Guid.NewGuid().ToString();
     public int CallbackCalls { get; private set; }
-    public bool SimulatedMatchSupplied { get; private set; }
+    public bool SimulatedMatchSupplied => simulated && SuppliedSits.Count > 0;
+    public HashSet<Guid> SuppliedSits { get; } = [];
     public HashSet<(string ClassificationId, string RulePackageId)> Requests { get; } = [];
 
     public override DataState GetDataState() => DataState.Rest;
@@ -207,29 +321,36 @@ sealed class LabExecutionState(Guid simulatedSit) : FileExecutionState
         foreach (var request in requests)
         {
             Requests.Add((request.ClassificationId, request.RulePackageId));
-            if (simulatedSit == Guid.Empty || !Guid.TryParse(request.ClassificationId, out var id) || id != simulatedSit)
+            if (!Guid.TryParse(request.ClassificationId, out var id) || !evidence.TryGetValue(id, out var match))
                 continue;
 
             results[request.ClassificationId] = new ClassificationResult
             {
                 Id = request.ClassificationId,
-                Name = "Synthetic lab match",
-                Count = 1,
-                ConfidenceLevel = 85,
+                Name = simulated ? "Synthetic lab match" : "Local audit rule match",
+                Count = match.Count,
+                ConfidenceLevel = match.Confidence,
                 SensitiveInformationDetections = "",
-                DetailedClassificationAttributes = [new() { ConfidenceLevel = 85, Count = 1 }]
+                DetailedClassificationAttributes = [new() { ConfidenceLevel = match.Confidence, Count = match.Count }]
             };
-            SimulatedMatchSupplied = true;
+            SuppliedSits.Add(id);
         }
 
         return results;
     }
 }
 
-sealed class LabConsent : IConsentDelegate
+sealed class LabConsent(bool silent) : IConsentDelegate
 {
+    public bool DeniedForSilentMode { get; private set; }
+
     public Consent GetUserConsent(string url)
     {
+        if (silent)
+        {
+            DeniedForSilentMode = true;
+            return Consent.Reject;
+        }
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "https")
             return Consent.Reject;
         Console.Error.Write($"Allow the MIP SDK to connect to {uri.Host}? [y/N] ");
@@ -248,16 +369,24 @@ sealed class LabLogger : ILoggerDelegateV3
         string function, string file, int line) { }
 }
 
-sealed class LabAuth(Guid tenantId, Guid clientId, string user) : IAuthDelegate
+sealed class LabAuth(Guid tenantId, Guid clientId, string? expectedUser, bool windowsSilent) : IAuthDelegate
 {
-    private readonly IPublicClientApplication client = PublicClientApplicationBuilder.Create(clientId.ToString())
-        .WithAuthority($"https://login.microsoftonline.com/{tenantId}")
-        .WithRedirectUri("http://localhost")
-        .Build();
+    private const string PolicyService = "870c4f2e-85b6-4d43-bdda-6ed9a579b725";
+    private readonly IPublicClientApplication client = BuildClient(tenantId, clientId, windowsSilent);
     private readonly object gate = new();
     private IAccount? account;
 
     public string? ErrorCode { get; private set; }
+    public string? AuthenticatedUser => account?.Username;
+
+    private static IPublicClientApplication BuildClient(Guid tenant, Guid app, bool silent)
+    {
+        var builder = PublicClientApplicationBuilder.Create(app.ToString())
+            .WithAuthority($"https://login.microsoftonline.com/{tenant}");
+        return (silent
+            ? builder.WithBroker(new BrokerOptions(BrokerOptions.OperatingSystems.Windows))
+            : builder.WithRedirectUri("http://localhost")).Build();
+    }
 
     public string AcquireToken(Identity identity, string authority, string resource, string claims)
     {
@@ -266,8 +395,9 @@ sealed class LabAuth(Guid tenantId, Guid clientId, string user) : IAuthDelegate
             ErrorCode = null;
             if (!Uri.TryCreate(authority, UriKind.Absolute, out var issuer) || issuer.Scheme != "https" ||
                 issuer.Host is not ("login.microsoftonline.com" or "login.windows.net") ||
-                !Uri.TryCreate(resource, UriKind.Absolute, out var audience) || audience.Scheme != "https" ||
-                audience.UserInfo.Length != 0 || audience.Query.Length != 0 || audience.Fragment.Length != 0)
+                (resource != PolicyService && (!Uri.TryCreate(resource, UriKind.Absolute, out var audience) ||
+                    audience.Scheme != "https" || audience.UserInfo.Length != 0 ||
+                    audience.Query.Length != 0 || audience.Fragment.Length != 0)))
             {
                 ErrorCode = "unsupported_auth_challenge";
                 return "";
@@ -279,7 +409,9 @@ sealed class LabAuth(Guid tenantId, Guid clientId, string user) : IAuthDelegate
                 var result = AcquireAsync(resource.TrimEnd('/') + "/.default", claims, deadline.Token)
                     .GetAwaiter().GetResult();
                 if (!Guid.TryParse(result.TenantId, out var actualTenant) || actualTenant != tenantId ||
-                    !string.Equals(result.Account.Username, user, StringComparison.OrdinalIgnoreCase))
+                    string.IsNullOrWhiteSpace(result.Account.Username) ||
+                    ((account?.Username ?? expectedUser) is { } user &&
+                        !string.Equals(result.Account.Username, user, StringComparison.OrdinalIgnoreCase)))
                 {
                     ErrorCode = "unexpected_tenant_or_user";
                     return "";
@@ -288,6 +420,7 @@ sealed class LabAuth(Guid tenantId, Guid clientId, string user) : IAuthDelegate
                 account = result.Account;
                 return result.AccessToken;
             }
+            catch (MsalUiRequiredException error) when (windowsSilent) { ErrorCode = "interaction_required:" + error.ErrorCode; }
             catch (MsalException error) { ErrorCode = error.ErrorCode; }
             catch (OperationCanceledException) { ErrorCode = "sign_in_timeout"; }
             catch (Exception error) { ErrorCode = error.GetType().Name; }
@@ -298,6 +431,12 @@ sealed class LabAuth(Guid tenantId, Guid clientId, string user) : IAuthDelegate
     private async Task<AuthenticationResult> AcquireAsync(string scope, string claims, CancellationToken cancellationToken)
     {
         string[] scopes = [scope];
+        if (windowsSilent)
+        {
+            var silent = client.AcquireTokenSilent(scopes, account ?? PublicClientApplication.OperatingSystemAccount);
+            if (!string.IsNullOrWhiteSpace(claims)) silent = silent.WithClaims(claims);
+            return await silent.ExecuteAsync(cancellationToken);
+        }
         if (account is not null)
         {
             try
@@ -312,7 +451,7 @@ sealed class LabAuth(Guid tenantId, Guid clientId, string user) : IAuthDelegate
             }
         }
 
-        var interactive = client.AcquireTokenInteractive(scopes).WithLoginHint(user);
+        var interactive = client.AcquireTokenInteractive(scopes).WithLoginHint(expectedUser);
         if (!string.IsNullOrWhiteSpace(claims)) interactive = interactive.WithClaims(claims);
         return await interactive.ExecuteAsync(cancellationToken);
     }

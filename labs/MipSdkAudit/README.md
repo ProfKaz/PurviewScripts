@@ -22,7 +22,7 @@ El instalador ejecuta esta prueba automáticamente. Para repetirla, usa el mismo
 & $lab.DotNetPath $lab.LabAssembly --self-test
 ~~~
 
-El resultado esperado incluye `nativeSdkInitialized`, `syntheticCallbackPassed` y `sampleUnchanged` en `true`.
+El resultado esperado incluye `nativeSdkInitialized`, `syntheticCallbackPassed`, `mappedAuditPassed` y `sampleUnchanged` en `true`. Esta prueba comprueba la entrada de auditoría, la traducción a un SIT y el rechazo de un archivo cambiado, sin autenticación en un tenant.
 
 Desde un clon del repositorio con el SDK .NET 10 x64 en el PATH, también puedes usar `dotnet run --project .\labs\MipSdkAudit -c Release -- --self-test`. Si hay varias instalaciones, ejecuta `Get-Command dotnet -All`, `dotnet --list-sdks` y `dotnet --list-runtimes` para identificar cuál está activa. Una instalación que solo muestre el runtime puede ejecutar ensamblados compilados pero necesita un SDK para compilar. [.NET en Windows](https://learn.microsoft.com/en-us/dotnet/core/install/windows#install-with-powershell)
 
@@ -59,3 +59,27 @@ Si ya registraste la aplicación manualmente, puedes pasar sus identificadores a
 Si el SDK no solicita el SIT elegido, revisa que la política se haya publicado para esa cuenta y que la regla se aplique al formato. Un arreglo vacío de acciones registra lo que devolvió el SDK en esa pasada. La coincidencia simulada comprueba la conexión con la política. La extracción y detección del documento se validan por separado en el piloto local. El laboratorio invoca `ClassifyAsync` para observar acciones y deshabilita la auditoría de descubrimiento del archivo. El SDK puede emitir telemetría mínima. [IFileHandler](https://learn.microsoft.com/en-us/dotnet/api/microsoft.informationprotection.file.ifilehandler?view=mipsdk-dotnet-1.18), [FileExecutionState](https://learn.microsoft.com/en-us/dotnet/api/microsoft.informationprotection.file.fileexecutionstate?view=mipsdk-dotnet-1.18)
 
 La salida omite tokens, UPN, XML de políticas y valores del documento. Antes de compartirla, revisa los identificadores de SIT y paquetes de reglas. La comparación posterior con `Set-FileLabel -AutoLabel` se hace sobre copias desechables porque ese comando puede escribir etiquetas. [Set-FileLabel](https://learn.microsoft.com/en-us/powershell/module/purviewinformationprotection/set-filelabel?view=azureipps)
+
+## Auditoría con la sesión de Windows
+
+Instala el scanner y el laboratorio desde la misma revisión. Ejecuta una vez `$app = & $lab.AppSetupScript -TenantId $tenantId` para agregar la URI de retorno de Web Account Manager (WAM) al registro del laboratorio. El script conserva el mismo `ClientId` y la URI del navegador que usa la prueba interactiva. Revisa el consentimiento para `UnifiedPolicy.User.Read` en Entra antes de intentar el flujo silencioso. [Registro de WAM en Microsoft Learn](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-acquire-token-wam)
+
+Copia `policy-audit.example.json` a `policy-audit.json` dentro de la carpeta del laboratorio. Completa `tenantId`, `clientId`, las raíces locales y la correspondencia entre cada `ruleId` de `classifiers.json` y el `sitId` que solicita la política. Configura la confianza que debe tener cada regla. Puedes añadir `expectedUser` como comprobación opcional del UPN. El archivo contiene identificadores y ajustes. Las credenciales y los tokens se gestionan mediante Windows y MSAL.
+
+~~~powershell
+$policyConfig = Join-Path $lab.LabDirectory 'policy-audit.json'
+& $lab.DotNetPath $lab.LabAssembly --check-sso $policyConfig
+~~~
+
+Ejecuta la comprobación en la sesión de Windows del usuario cuya política se evaluará. WAM intenta adquirir un token para esa cuenta y el laboratorio valida que pertenezca al tenant configurado. Si Entra requiere consentimiento, MFA u otra interacción, el modo silencioso devuelve un error sin abrir un diálogo. Para una tarea futura usa la opción **Ejecutar solo cuando el usuario haya iniciado sesión** bajo esa misma cuenta. [Limitaciones de WAM](https://learn.microsoft.com/en-us/entra/msal/dotnet/acquiring-tokens/desktop-mobile/wam#troubleshooting)
+
+Para comprobar la integración, usa una carpeta de piloto con un TXT o CSV sintético nuevo que coincida con una regla mapeada. Si el estado activo del scanner pertenece a otro alcance, completa esa generación o usa una configuración de scanner con una carpeta de estado dedicada. El laboratorio puede procesar el resumen de un tramo limitado.
+
+~~~powershell
+$run = .\Invoke-LocalMIPScanner.ps1 -Root 'C:\Datos\PilotoM3' -AuditContent
+& $lab.DotNetPath $lab.LabAssembly --config $policyConfig --audit-log $run.logFile
+~~~
+
+El laboratorio procesa únicamente coincidencias mapeadas de un JSONL cerrado dentro de las raíces autorizadas. Comprueba el SHA-256 del archivo bajo un descriptor de solo lectura antes de entregar los recuentos a MIP. Si cambia el archivo, emite `auditFileError`. Si falla el acceso al tenant, puedes reprocesar el mismo JSONL cuando se resuelva el acceso y el archivo siga intacto. Los registros de auditoría local de versiones anteriores carecen de la huella requerida. La primera pasada tras actualizar vuelve a evaluar el contenido para generar el formato nuevo.
+
+Revisa `suppliedSits`, `actions`, `recommendedLabelIds` y `requiredLabelIds`. La salida describe las acciones propuestas por la política. El piloto mantiene los archivos en solo lectura y deja la aplicación de etiquetas para una etapa posterior. `maxFiles` limita los candidatos por JSONL. Si se supera, reduce el alcance o divide el recorrido en tramos.

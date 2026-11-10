@@ -83,7 +83,7 @@ $sha = $commit.sha
 if ($sha -notmatch '^[0-9a-f]{40}$') { throw 'Could not resolve a GitHub commit.' }
 $tree = Invoke-RestMethod -Uri "$api/git/trees/$($commit.commit.tree.sha)?recursive=1" -Headers $headers
 if ($tree.truncated) { throw 'GitHub returned an incomplete repository tree.' }
-$files = 'MipSdkAudit.csproj', 'Program.cs', 'README.md', 'New-MipSdkAuditApp.ps1'
+$files = 'MipSdkAudit.csproj', 'Program.cs', 'AuditInput.cs', 'README.md', 'New-MipSdkAuditApp.ps1', 'policy-audit.example.json'
 $hashes = @{}
 foreach ($name in $files) {
     $relative = "labs/MipSdkAudit/$name"

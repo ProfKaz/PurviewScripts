@@ -79,9 +79,22 @@ try {
             }
         }) | Sort-Object
         if ($app.SignInAudience -ne 'AzureADMyOrg' -or -not $app.IsFallbackPublicClient -or
-            $null -eq $app.PublicClient -or ($app.PublicClient.RedirectUris -join ',').TrimEnd('/') -cne 'http://localhost' -or
+            $null -eq $app.PublicClient -or
             ($actual -join ',') -ine ($expected -join ',')) {
             throw 'The existing lab registration has different settings or permissions. Review it in Entra or use a distinct -DisplayName.'
+        }
+    }
+
+    $brokerUri = "ms-appx-web://Microsoft.AAD.BrokerPlugin/$($app.AppId)"
+    $redirects = if ($created) { @('http://localhost') } else { @($app.PublicClient.RedirectUris) }
+    if (@($redirects | Where-Object { $_.TrimEnd('/') -ceq 'http://localhost' }).Count -ne 1 -or
+        @($redirects | Where-Object { $_.TrimEnd('/') -cne 'http://localhost' -and $_ -ine $brokerUri }).Count -gt 0) {
+        throw 'The existing lab registration has unexpected redirect URIs. Review it in Entra.'
+    }
+    if ($brokerUri -notin $redirects) {
+        if (-not $PSCmdlet.ShouldProcess($app.AppId, 'Enable Windows broker sign-in')) { return }
+        Update-MgApplication -ApplicationId $app.Id -BodyParameter @{
+            PublicClient = @{ RedirectUris = @(@($redirects) + $brokerUri) }
         }
     }
 
@@ -110,6 +123,7 @@ try {
         AppObjectId = $app.Id
         ServicePrincipalId = $enterprise[0].Id
         Created = $created
+        BrokerRedirectUri = $brokerUri
         DelegatedPermissions = @($resources.Values)
         PortalUrl = "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/CallAnAPI/appId/$($app.AppId)"
     }

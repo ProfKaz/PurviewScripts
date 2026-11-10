@@ -1,3 +1,4 @@
 bin/
 obj/
 .installer-backups/
+policy-audit.json
