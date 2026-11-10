@@ -55,6 +55,8 @@ Cuando existe `policy-audit.json` junto al script, el registro comprueba el tena
 
 En el registro administrado, el script incluye **Kaz Demos** en la descripción y establece el logo que entrega el instalador. El PNG es opaco, de 215 × 215 píxeles y de menos de 100 KB. Si se reemplaza un logo anterior, se conserva una copia en el perfil del administrador. El resultado muestra `LogoUpdated`, el hash verificado y, si aplica, `LogoBackupPath`. El dominio y la verificación del publicador se administran en Entra. [Formato del logo](https://learn.microsoft.com/es-es/entra/identity/enterprise-apps/application-properties#logotipo), [dominio del publicador](https://learn.microsoft.com/en-us/entra/identity-platform/howto-configure-publisher-domain)
 
+Al ejecutar una copia del script desde la raíz de la instalación, también se busca el logo en `labs/MipSdkAudit`. Si falta en ambas rutas, el script intenta descargar la versión publicada y comprueba su SHA-256. Si la descarga falla, el registro continúa, conserva el logo actual y devuelve `LogoStatus = Unavailable`. Usa `-LogoPath` para indicar un PNG local. [Descargar el PNG de Kaz Demos](https://raw.githubusercontent.com/ProfKaz/PurviewScripts/ea977502aedfd20f6bf3e73d813b1941c89b214e/labs/MipSdkAudit/kaz-demos-entra-215.png)
+
 ## Interpretar el resultado
 
 | Evento | Qué comprobar |
