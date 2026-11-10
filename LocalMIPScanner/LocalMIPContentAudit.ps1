@@ -31,7 +31,7 @@ function Get-ContentAuditSettings {
         MaxBytes = $config['maxBytes']
         Rules = $rules
         Fingerprint = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
-            [Text.Encoding]::UTF8.GetBytes("local-text-v1" + [char]10 + $json)))
+            [Text.Encoding]::UTF8.GetBytes("local-text-v2" + [char]10 + $json)))
     }
 }
 
@@ -62,7 +62,7 @@ function Read-AuditText {
         if ($Size -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191) {
             $bomLength = 3
         }
-        return $script:Utf8.GetString($bytes, $bomLength, $Size - $bomLength)
+        return @{ Text = $script:Utf8.GetString($bytes, $bomLength, $Size - $bomLength); Bytes = $bytes }
     } finally { $stream.Dispose() }
 }
 
@@ -92,7 +92,7 @@ function Invoke-FileContentAudit {
         foreach ($rule in $Audit.Rules.GetEnumerator()) {
             $timer = [Diagnostics.Stopwatch]::StartNew()
             $count = 0
-            $match = $rule.Value.Match($content)
+            $match = $rule.Value.Match($content.Text)
             while ($match.Success) {
                 $count++
                 if ($count -eq 1000) { break }
@@ -125,9 +125,13 @@ function Invoke-FileContentAudit {
     $Observation.item['lastLocalAuditUtc'] = $now.ToString('o')
     $Observation.item['localAuditRulesHash'] = $Audit.Fingerprint
     $Summary.contentAudited++
-    if ($findings.Count -gt 0) { $Summary.contentAuditFilesWithMatches++ }
-    Write-InventoryEvent $Writer @{
+    $event = @{
         event = 'contentAudit'; path = $Observation.path; outcome = 'completed'
         rulesHash = $Audit.Fingerprint; matchesByRule = $findings
     }
+    if ($findings.Count -gt 0) {
+        $Summary.contentAuditFilesWithMatches++
+        $event.sha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($content.Bytes))
+    }
+    Write-InventoryEvent $Writer $event
 }

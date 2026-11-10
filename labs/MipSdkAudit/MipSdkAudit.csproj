@@ -10,5 +10,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.InformationProtection.File" Version="1.18.148" />
     <PackageReference Include="Microsoft.Identity.Client" Version="4.92.0" />
+    <PackageReference Include="Microsoft.Identity.Client.Broker" Version="4.92.0" />
   </ItemGroup>
 </Project>
