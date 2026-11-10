@@ -36,8 +36,14 @@ function Assert-StateEntry {
         $Item['path'] -notmatch '^[A-Za-z]:\\' -or
         $Item['sizeBytes'] -isnot [long] -or $Item['sizeBytes'] -lt 0 -or
         $Item['status'] -ne 'PendingClassification') { throw 'Invalid inventory entry.' }
-    foreach ($field in 'lastWriteUtc', 'lastDiscoveredUtc', 'lastContentScannedUtc') {
-        if ($field -eq 'lastContentScannedUtc' -and $null -eq $Item[$field]) { continue }
+    if ($Item.ContainsKey('lastLocalAuditUtc') -ne $Item.ContainsKey('localAuditRulesHash') -or
+        ($Item.ContainsKey('localAuditRulesHash') -and
+            ($Item['localAuditRulesHash'] -isnot [string] -or $Item['localAuditRulesHash'] -cnotmatch '^[0-9A-F]{64}$'))) {
+        throw 'Invalid local content audit fingerprint.'
+    }
+    foreach ($field in 'lastWriteUtc', 'lastDiscoveredUtc', 'lastContentScannedUtc', 'lastLocalAuditUtc') {
+        if (($field -eq 'lastContentScannedUtc' -and $null -eq $Item[$field]) -or
+            ($field -eq 'lastLocalAuditUtc' -and -not $Item.ContainsKey($field))) { continue }
         $date = [datetime]::MinValue
         if ($Item[$field] -isnot [string] -or -not [datetime]::TryParseExact($Item[$field], 'o',
                 [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind,
