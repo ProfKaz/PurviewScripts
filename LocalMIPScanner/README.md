@@ -1,6 +1,6 @@
 # LocalMIPScanner
 
-M1 genera un inventario local en modo auditoría. M2.1 añade estado incremental persistente con reanudación por directorio para distinguir archivos nuevos, modificados y sin cambios, sin leer su contenido. Lee rutas, extensiones, tamaños y fechas de modificación. Funciona en Windows con PowerShell 7.2 o posterior y con los permisos de la cuenta que lo ejecuta. Este hito solo inspecciona metadatos del sistema de archivos y escribe sus propios registros.
+M1 inventaría metadatos del sistema de archivos. M2.1 añade estado incremental persistente con reanudación por directorio. El piloto M3 añade detección local de contenido TXT y CSV mediante activación explícita. LocalMIPScanner funciona en Windows con PowerShell 7.2 o posterior y con los permisos de la cuenta que lo ejecuta.
 
 ## Instalador / actualizador desde GitHub
 
@@ -75,6 +75,23 @@ Las decisiones new, modified, unchanged y due se registran en los eventos file. 
 En el primer arranque, M2.1 valida y migra `inventory-state.jsonl` si existe. El archivo de M2 queda disponible para una vuelta a la versión anterior. M2.1 mantiene `inventory.index.jsonl`, `inventory.active.jsonl` y un único backup rotativo `inventory.index.backup`. Si el índice principal falla la validación y el backup es válido, restaura el backup. Si ambas copias fallan, conserva los archivos para diagnóstico y termina con error.
 
 Si cambias raíces, filtros u opciones de detección mientras hay un journal pendiente, termina primero la generación con los parámetros originales. Si quieres reiniciar el recorrido con el alcance nuevo, detén el scanner y archiva `inventory.active.jsonl` fuera de la carpeta de estado. El siguiente arranque parte del último índice confirmado. El mismo procedimiento permite volver al índice confirmado si el journal tiene corrupción en registros completos. Las pausas y límites de ejecución se pueden ajustar entre invocaciones de la misma generación.
+
+## Piloto M3 de auditoría de contenido
+
+Desde la carpeta de instalación, ejecuta la prueba sintética y luego usa una raíz de prueba. Si ya tienes una generación de inventario pendiente, termina esa generación o usa una copia de la configuración con una carpeta de estado dedicada al piloto.
+
+~~~powershell
+pwsh -NoProfile -File .\tests\Test-ContentAudit.ps1
+.\Invoke-LocalMIPScanner.ps1 -Root 'C:\Datos\PilotoM3' -AuditContent
+~~~
+
+`-AuditContent` requiere que el estado incremental esté habilitado. Lee TXT y CSV como texto UTF-8, con o sin BOM, y aplica las expresiones de [classifiers.json](Config/classifiers.json). La regla incluida reconoce marcadores sintéticos de la forma `PILOT-123456`. El límite de lectura predeterminado es 1 MiB por archivo y puede ajustarse hasta 4 MiB. Cada regla tiene un presupuesto de tiempo y un máximo de 1.000 coincidencias registradas por archivo.
+
+Los eventos `contentAudit` contienen la ruta, el resultado y, si hubo coincidencias, sus recuentos por identificador de regla. El contenido leído y los valores detectados se quedan fuera del índice y de los logs. La auditoría funciona localmente y deja intactos los documentos y sus etiquetas.
+
+El resumen muestra `contentAudited`, `contentAuditReused`, `contentAuditFilesWithMatches`, `contentAuditSkipped` y `contentAuditErrors`. Los formatos sin extractor y los archivos que exceden el límite de auditoría figuran como omitidos. Un resultado satisfactorio, con o sin coincidencias, se reutiliza mientras coincidan los metadatos y las reglas y no venza `rescanIntervalDays`. Los errores de lectura, codificación o tiempo de regla se reintentan en una generación posterior. Los contadores de auditoría local se mantienen separados de `pendingClassification`, que conserva el significado del inventario para una clasificación posterior con Purview.
+
+Mantén `-AuditContent` y las mismas reglas al reanudar un journal activo. Aplica cambios de reglas entre generaciones. El diseño y el plan de laboratorio con Purview se detallan en [Arquitectura](ARCHITECTURE.md#piloto-m3-de-auditoría-local).
 
 ## Programador de tareas de Windows
 

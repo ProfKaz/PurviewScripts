@@ -83,3 +83,17 @@ El protocolo usa Flush(true) para los contenidos y renombres en el mismo volumen
 ### Coste de una pasada
 
 La enumeración es secuencial y aplica la pausa de performance.json. La memoria crece con el índice, las rutas observadas, la pila de directorios y el lote del directorio actual. El journal conserva observaciones suficientes para decidir eliminaciones tras un reinicio. Un nuevo segmento vuelve a leer el índice y el journal. Cada consolidación valida y reescribe el índice completo y rota el backup. El límite de tiempo controla el recorrido entre checkpoints y deja fuera la carga y la consolidación. Estos costes se miden con archivos sintéticos antes de probar perfiles completos.
+
+## Piloto M3 de auditoría local
+
+El piloto abre en solo lectura archivos TXT y CSV elegibles. Antes de leer, comprueba que los metadatos del archivo abierto coincidan con los obtenidos durante el descubrimiento. La lectura se limita por tamaño y el motor de expresiones regulares limita el tiempo de búsqueda y el recuento por regla. CSV se interpreta como texto completo. Los extractores de Office y PDF quedan para una ampliación del piloto.
+
+El checkpoint conserva `lastLocalAuditUtc` y `localAuditRulesHash` para auditorías completadas. El índice conserva la marca de finalización y la huella de las reglas, mientras que el log de la invocación guarda los recuentos. Las marcas se invalidan al cambiar los metadatos, las reglas o el extractor, al vencer el intervalo de reescaneo o al forzar una pasada. Un error de auditoría se registra aparte de los errores de descubrimiento y queda pendiente de reintento. La escritura y recuperación del estado siguen el protocolo de M2.1.
+
+`Test-ContentAudit.ps1` comprueba positivos y negativos sintéticos para TXT y CSV, el recuento, el manejo de archivos omitidos y UTF-8 inválido, la reanudación, la reutilización, los cambios de archivo y regla y la integridad de los documentos. La cobertura de esta regla sintética se limita al corpus de prueba.
+
+### Prueba pendiente en un tenant de laboratorio
+
+1. Con una identidad de prueba y una directiva publicada, inicializar un motor File SDK, cargar tipos de información confidencial y registrar qué reglas están disponibles para esa identidad. [Inicialización del SDK](https://learn.microsoft.com/en-us/information-protection/develop/quick-app-initialization-csharp), [motor File SDK](https://learn.microsoft.com/en-us/dotnet/api/microsoft.informationprotection.file.ifileengine?view=mipsdk-dotnet-1.18)
+2. Usar un corpus sintético con positivos y negativos por formato. Ejecutar `ClassifyAsync`, observar las solicitudes de `FileExecutionState.GetClassificationResults` y registrar qué resultados debe aportar el detector local y qué acciones devuelve la directiva. Verificar hash y fecha de escritura antes y después de la prueba. [IFileHandler](https://learn.microsoft.com/en-us/dotnet/api/microsoft.informationprotection.file.ifilehandler?view=mipsdk-dotnet-1.18), [FileExecutionState](https://learn.microsoft.com/en-us/dotnet/api/microsoft.informationprotection.file.fileexecutionstate?view=mipsdk-dotnet-1.18)
+3. Para comparar la cobertura con `Set-FileLabel -AutoLabel`, usar copias desechables del corpus. Registrar la etiqueta inicial, la etiqueta resultante y los formatos admitidos. Esta comparación se realiza fuera del modo auditoría porque el cmdlet puede escribir etiquetas. [Set-FileLabel](https://learn.microsoft.com/en-us/powershell/module/purviewinformationprotection/set-filelabel?view=azureipps)

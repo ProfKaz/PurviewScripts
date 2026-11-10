@@ -1,0 +1,9 @@
+{
+  "maxBytes": 1048576,
+  "rules": [
+    {
+      "id": "synthetic-pilot-id",
+      "pattern": "\\bPILOT-[0-9]{6}\\b"
+    }
+  ]
+}

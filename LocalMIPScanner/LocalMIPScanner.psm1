@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 
 Import-Module (Join-Path $PSScriptRoot 'LocalMIPState.psm1') -Force
 . (Join-Path $PSScriptRoot 'LocalMIPCheckpoint.ps1')
+. (Join-Path $PSScriptRoot 'LocalMIPContentAudit.ps1')
 
 function ConvertTo-LocalPath {
     param([string] $Path)
@@ -205,9 +206,11 @@ function Invoke-InventoryDirectory {
                         lastDiscoveredUtc = [datetime]::UtcNow.ToString('o')
                         lastContentScannedUtc = $lastScanned; status = 'PendingClassification'
                     }
-                } else {
-                    $Summary.metadataUpdatesSkipped++
                 }
+                if ($null -ne $Config.ContentAudit) {
+                    Invoke-FileContentAudit $Config.ContentAudit $Summary $Writer $observation $previous $entry.Extension $size $modified $Incremental.Days
+                }
+                if (-not $observation.ContainsKey('item')) { $Summary.metadataUpdatesSkipped++ }
                 Add-DirectoryRecord $State $observation
                 $Summary.pendingClassification++
             }
@@ -257,12 +260,18 @@ function Invoke-LocalMIPInventory {
     param(
         [string[]] $Root, [string] $ConfigDirectory, [string] $LogDirectory,
         [ValidateRange(0, 2147483647)] [int] $MaxDirectories = 0,
-        [ValidateRange(0, 2147483647)] [int] $MaxSeconds = 0
+        [ValidateRange(0, 2147483647)] [int] $MaxSeconds = 0,
+        [switch] $AuditContent
     )
 
     if (-not $IsWindows) { throw 'LocalMIPScanner requires Windows.' }
     $config = Get-InventoryConfig $ConfigDirectory
     $incremental = Get-IncrementalSettings $ConfigDirectory
+    $config.ContentAudit = $null
+    if ($AuditContent) {
+        if (-not $incremental.Enabled) { throw 'Content audit requires incremental discovery.' }
+        $config.ContentAudit = Get-ContentAuditSettings $ConfigDirectory
+    }
     $logPath = ConvertTo-LocalPath $LogDirectory
     $roots = @($Root | ForEach-Object { ConvertTo-LocalPath $_ } | Sort-Object -Property Length, { $_ })
     $config.Exclusions += $logPath
@@ -311,6 +320,13 @@ function Invoke-LocalMIPInventory {
         enumerationMilliseconds = 0
         stateSaveMilliseconds = 0
     }
+    if ($AuditContent) {
+        $summary.contentAudited = 0
+        $summary.contentAuditReused = 0
+        $summary.contentAuditSkipped = 0
+        $summary.contentAuditErrors = 0
+        $summary.contentAuditFilesWithMatches = 0
+    }
     $timer = [Diagnostics.Stopwatch]::StartNew()
     $state = $null
 
@@ -333,12 +349,14 @@ function Invoke-LocalMIPInventory {
                 }
                 return $true
             })
-            $scopeJson = Get-StateJson ([ordered] @{
+            $scopeSettings = [ordered] @{
                 roots = $activeRoots; exclusions = @($config.Exclusions | Sort-Object -Unique)
                 extensions = @($config.Extensions | Sort-Object)
                 maxBytes = $incremental.MaxBytes; detectDeleted = $incremental.DetectDeleted
                 detectModified = $incremental.DetectModified; force = $incremental.Force; days = $incremental.Days
-            })
+            }
+            if ($AuditContent) { $scopeSettings.contentAudit = $config.ContentAudit.Fingerprint }
+            $scopeJson = Get-StateJson $scopeSettings
             $scope = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($scopeJson)))
             $state = Open-IncrementalState $incremental $activeRoots $scope
             $summary.generation = $state.Generation
