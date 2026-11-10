@@ -45,7 +45,15 @@ $sitId = Read-Host 'Id del SIT de laboratorio que solicitó la política'
 
 El navegador solicita inicio de sesión. Si el SDK pide consentimiento para conectarse a un servicio, el laboratorio muestra el host en la consola.
 
-Si ya registraste la aplicación manualmente, puedes pasar sus identificadores al laboratorio. El script reutiliza sus propios registros cuando coinciden la configuración y los permisos. Usa `-WhatIf` para revisar la intención sin conectar a Graph. El consentimiento se gestiona en Entra y la política de Purview se publica por separado.
+Si ya registraste la aplicación manualmente, puedes pasar sus identificadores al laboratorio. El consentimiento se gestiona en Entra y la política de Purview se publica por separado.
+
+### Reutilización y marca por tenant
+
+Ejecuta el registro una vez por tenant con la cuenta administradora que prepara el piloto. Después distribuye `policy-audit.json` con el mismo `TenantId` y `ClientId` a los equipos que deban usar esa aplicación. El modo silencioso usa esa configuración para cargar la política del usuario. El permiso administrativo de Graph se solicita en el paso de registro.
+
+Cuando existe `policy-audit.json` junto al script, el registro comprueba el tenant y busca la aplicación por el `ClientId` guardado. También puedes indicar `-ClientId` o un `-ConfigPath` específico. Si no hay ID guardado, busca por nombre y, para el nombre predeterminado, por la marca interna del laboratorio para recuperar un registro renombrado. Los resultados ambiguos o incompatibles requieren revisión. Usa `-WhatIf` para comprobar la configuración local y el formato del logo sin conectar a Graph.
+
+En el registro administrado, el script incluye **Kaz Demos** en la descripción y establece el logo que entrega el instalador. El PNG es opaco, de 215 × 215 píxeles y de menos de 100 KB. Si se reemplaza un logo anterior, se conserva una copia en el perfil del administrador. El resultado muestra `LogoUpdated`, el hash verificado y, si aplica, `LogoBackupPath`. El dominio y la verificación del publicador se administran en Entra. [Formato del logo](https://learn.microsoft.com/es-es/entra/identity/enterprise-apps/application-properties#logotipo), [dominio del publicador](https://learn.microsoft.com/en-us/entra/identity-platform/howto-configure-publisher-domain)
 
 ## Interpretar el resultado
 
