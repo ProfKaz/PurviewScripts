@@ -53,6 +53,8 @@ Puedes pasar varias raíces con -Root 'C:\Datos', 'D:\Proyectos'. Se requieren r
 
 El resumen incluye generation, generationComplete, directoriesCompleted, resumedDirectories, generationHasErrors y recoveredIndex. Los contadores de archivos representan el trabajo de esa invocación. deletedFiles corresponde a la consolidación de toda la generación. Si se interrumpe una invocación, puede quedar un registro de auditoría sin summary y repetirse eventos del último directorio al reanudar.
 
+`metadataUpdatesSkipped` cuenta los archivos cuyo registro del índice se reutilizó durante la invocación. Aparece en la salida de consola y en el resumen JSONL. El scanner sigue recorriendo los directorios y comparando tamaño y fecha de escritura. Si se desactiva `detectModifiedFiles`, una decisión `unchanged` puede incluir una actualización de metadatos y quedar fuera de ese conteo.
+
 ## Configuración
 
 Usa los archivos de Config o pasa `-ConfigDirectory` con una copia para el piloto.

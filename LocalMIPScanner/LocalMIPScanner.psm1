@@ -205,6 +205,8 @@ function Invoke-InventoryDirectory {
                         lastDiscoveredUtc = [datetime]::UtcNow.ToString('o')
                         lastContentScannedUtc = $lastScanned; status = 'PendingClassification'
                     }
+                } else {
+                    $Summary.metadataUpdatesSkipped++
                 }
                 Add-DirectoryRecord $State $observation
                 $Summary.pendingClassification++
@@ -294,6 +296,7 @@ function Invoke-LocalMIPInventory {
         newFiles = 0
         modifiedFiles = 0
         unchangedFiles = 0
+        metadataUpdatesSkipped = 0
         dueFiles = 0
         deletedFiles = 0
         oversizedFiles = 0

@@ -34,6 +34,7 @@ try {
     $params = @{ Root=$root; ConfigDirectory=$config; LogDirectory=$logs }
     $first = & $scanner @params
     Assert-Value 2 $first.newFiles 'First run new'
+    Assert-Value 0 $first.metadataUpdatesSkipped 'First run reused metadata'
     Assert-Value 0 $first.errors 'First run errors'
     Assert-Value 2 $first.pendingClassification 'First run pending'
     $firstState = @(Get-Content -LiteralPath (Join-Path $state 'inventory.index.jsonl') |
@@ -48,6 +49,9 @@ try {
     $second = & $scanner @params
     Assert-Value 0 $second.newFiles 'Second run new'
     Assert-Value 2 $second.unchangedFiles 'Second run unchanged'
+    Assert-Value 2 $second.metadataUpdatesSkipped 'Second run reused metadata'
+    $secondSummary = Get-Content -LiteralPath $second.logFile -Tail 1 | ConvertFrom-Json
+    Assert-Value 2 $secondSummary.metadataUpdatesSkipped 'Second run reused metadata in JSONL'
     Assert-Value 0 $second.deletedFiles 'Second run deleted'
     Add-Content -LiteralPath (Join-Path $root 'a.txt') -Value 'updated'
     Set-Content -LiteralPath (Join-Path $root 'c.txt') -Value 'charlie'
@@ -55,6 +59,7 @@ try {
     $third = & $scanner @params
     Assert-Value 1 $third.newFiles 'Third run new'
     Assert-Value 1 $third.modifiedFiles 'Third run modified'
+    Assert-Value 0 $third.metadataUpdatesSkipped 'Third run reused metadata'
     Assert-Value 1 $third.deletedFiles 'Third run deleted'
     Assert-Value 0 $third.errors 'Third run errors'
     $records = @(Get-Content -LiteralPath (Join-Path $state 'inventory.index.jsonl') | ConvertFrom-Json | Where-Object { $_.PSObject.Properties['path'] })
@@ -64,7 +69,15 @@ try {
     $lastEvents = @(Get-Content -LiteralPath $third.logFile | ConvertFrom-Json)
     Assert-Value 1 @($lastEvents | Where-Object event -eq 'deleted').Count 'Deleted events'
     Assert-Value 'summary' $lastEvents[-1].event 'Final summary event'
-    'PASS: M2 first, repeat, changed, added, deleted, state integrity and JSONL summary'
+
+    # Disabling change reporting can still refresh one record classified as unchanged.
+    $settings.detectModifiedFiles = $false
+    $settings | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $config 'incremental.json')
+    Add-Content -LiteralPath (Join-Path $root 'a.txt') -Value 'another change'
+    $fourth = & $scanner @params
+    Assert-Value 2 $fourth.unchangedFiles 'Fourth run unchanged decisions'
+    Assert-Value 1 $fourth.metadataUpdatesSkipped 'Fourth run reused only one metadata record'
+    'PASS: M2 first, repeat, changed, added, deleted, state integrity and metadata reuse summary'
 } finally {
     # A cleanup failure must not conceal an earlier assertion or scanner exception.
     # Short retries tolerate transient Windows file indexing/antivirus handles.
