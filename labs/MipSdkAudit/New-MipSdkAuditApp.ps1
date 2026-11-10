@@ -5,7 +5,7 @@ param(
     [guid] $ClientId = [guid]::Empty,
     [ValidateNotNullOrEmpty()][string] $ConfigPath = (Join-Path $PSScriptRoot 'policy-audit.json'),
     [ValidateNotNullOrEmpty()][string] $DisplayName = 'LocalMIPScanner MIP SDK Lab',
-    [ValidateNotNullOrEmpty()][string] $LogoPath = (Join-Path $PSScriptRoot 'kaz-demos-entra-215.png'),
+    [ValidateNotNullOrEmpty()][string] $LogoPath,
     [switch] $IncludeRightsManagement
 )
 
@@ -33,23 +33,44 @@ if ($PSBoundParameters.ContainsKey('ClientId') -and $ClientId -eq [guid]::Empty)
     throw 'Specify a valid -ClientId.'
 }
 
-# Match the Entra logo validation used by the Profile Card branding script.
-$logo = Get-Item -LiteralPath $LogoPath
-if ($logo.PSIsContainer -or $logo.Extension -ine '.png' -or $logo.Length -gt 100KB) {
-    throw 'The Entra logo must be a PNG file of up to 100 KB.'
-}
-Add-Type -AssemblyName System.Drawing.Common
-$image = [Drawing.Image]::FromFile($logo.FullName)
-try {
-    if ($image.RawFormat.Guid -ne [Drawing.Imaging.ImageFormat]::Png.Guid -or
-        $image.Width -ne 215 -or $image.Height -ne 215 -or [Drawing.Image]::IsAlphaPixelFormat($image.PixelFormat) -or
-        ($image.Flags -band ([Drawing.Imaging.ImageFlags]::HasAlpha -bor [Drawing.Imaging.ImageFlags]::HasTranslucent))) {
-        throw 'The Entra logo must be an opaque 215 by 215 pixel PNG.'
+function Get-LocalLogo {
+    param([string] $Path, [string] $ExpectedHash)
+
+    $file = Get-Item -LiteralPath $Path
+    if ($file.PSIsContainer -or $file.Extension -ine '.png' -or $file.Length -gt 100KB) {
+        throw 'The Entra logo must be a PNG file of up to 100 KB.'
     }
-} finally { $image.Dispose() }
-$logoHash = (Get-FileHash -LiteralPath $logo.FullName -Algorithm SHA256).Hash
+    $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+    if ($ExpectedHash -and $hash -cne $ExpectedHash) {
+        throw 'The downloaded logo failed SHA-256 verification.'
+    }
+    Add-Type -AssemblyName System.Drawing.Common
+    $image = [Drawing.Image]::FromFile($file.FullName)
+    try {
+        if ($image.RawFormat.Guid -ne [Drawing.Imaging.ImageFormat]::Png.Guid -or
+            $image.Width -ne 215 -or $image.Height -ne 215 -or [Drawing.Image]::IsAlphaPixelFormat($image.PixelFormat) -or
+            ($image.Flags -band ([Drawing.Imaging.ImageFlags]::HasAlpha -bor [Drawing.Imaging.ImageFlags]::HasTranslucent))) {
+            throw 'The Entra logo must be an opaque 215 by 215 pixel PNG.'
+        }
+    } finally { $image.Dispose() }
+    @{ Path = $file.FullName; Hash = $hash }
+}
+
+$localLogoPath = $LogoPath
+if ($PSBoundParameters.ContainsKey('LogoPath')) {
+    if (-not (Test-Path -LiteralPath $LogoPath -PathType Leaf)) {
+        throw "The logo specified by -LogoPath does not exist: '$LogoPath'. Supply the PNG path or omit -LogoPath to use the default logo."
+    }
+} else {
+    $localLogoPath = @(
+        Join-Path $PSScriptRoot 'kaz-demos-entra-215.png'
+        Join-Path $PSScriptRoot 'labs/MipSdkAudit/kaz-demos-entra-215.png'
+    ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+}
+$logo = if ($localLogoPath) { Get-LocalLogo $localLogoPath }
 
 if ($WhatIfPreference) {
+    if ($null -eq $logo) { Write-Host 'The default logo will be downloaded from GitHub during setup.' }
     [void] $PSCmdlet.ShouldProcess($TenantId, "Resolve the public client '$DisplayName' and apply Kaz Demos branding")
     return
 }
@@ -92,7 +113,19 @@ if ($IncludeRightsManagement) {
 
 $connected = $false
 $downloadedLogo = Join-Path ([IO.Path]::GetTempPath()) "mip-lab-logo-$([guid]::NewGuid().ToString('N')).png"
+$temporaryDefaultLogo = $null
 try {
+    if ($null -eq $logo) {
+        $temporaryDefaultLogo = Join-Path ([IO.Path]::GetTempPath()) "mip-lab-default-logo-$([guid]::NewGuid().ToString('N')).png"
+        $logoUri = 'https://raw.githubusercontent.com/ProfKaz/PurviewScripts/ea977502aedfd20f6bf3e73d813b1941c89b214e/labs/MipSdkAudit/kaz-demos-entra-215.png'
+        try {
+            Invoke-WebRequest -Uri $logoUri -OutFile $temporaryDefaultLogo -TimeoutSec 20
+            $logo = Get-LocalLogo $temporaryDefaultLogo -ExpectedHash '55FFE29B1453404E0DB12DA9BC2C17C654F3A026A12334CCF6447C95A4B058A6'
+        } catch {
+            Write-Warning "The default logo is unavailable. The app setup will continue without updating its logo. Use -LogoPath to supply the PNG. $($_.Exception.Message)"
+        }
+    }
+
     Connect-MgGraph -TenantId $TenantId -Scopes 'Application.ReadWrite.All' -ContextScope Process -NoWelcome | Out-Null
     $connected = $true
     if ([guid](Get-MgContext).TenantId -ne $TenantId) { throw 'Microsoft Graph connected to a different tenant.' }
@@ -194,27 +227,30 @@ try {
     }
     if ($enterprise.Count -ne 1) { throw 'Could not identify a single enterprise application for the lab.' }
 
-    $logoUpdated = $false
+    $logoStatus = 'Unavailable'
     $logoBackup = $null
-    $currentHash = Read-ApplicationLogoHash $app.Id $downloadedLogo
-    if ($currentHash -ne $logoHash) {
-        if (-not $PSCmdlet.ShouldProcess($app.AppId, 'Set the Kaz Demos application logo')) { return }
-        if ($currentHash) {
-            $backupDirectory = Join-Path $env:LOCALAPPDATA 'LocalMIPScanner\MipSdkAudit\branding-backups'
-            [void] [IO.Directory]::CreateDirectory($backupDirectory)
-            $logoBackup = Join-Path $backupDirectory "$($app.AppId)-$([guid]::NewGuid().ToString('N')).bin"
-            [IO.File]::Copy($downloadedLogo, $logoBackup)
+    if ($null -ne $logo) {
+        $logoStatus = 'Unchanged'
+        $currentHash = Read-ApplicationLogoHash $app.Id $downloadedLogo
+        if ($currentHash -ne $logo.Hash) {
+            if (-not $PSCmdlet.ShouldProcess($app.AppId, 'Set the Kaz Demos application logo')) { return }
+            if ($currentHash) {
+                $backupDirectory = Join-Path $env:LOCALAPPDATA 'LocalMIPScanner\MipSdkAudit\branding-backups'
+                [void] [IO.Directory]::CreateDirectory($backupDirectory)
+                $logoBackup = Join-Path $backupDirectory "$($app.AppId)-$([guid]::NewGuid().ToString('N')).bin"
+                [IO.File]::Copy($downloadedLogo, $logoBackup)
+            }
+            Set-MgApplicationLogo -ApplicationId $app.Id -InFile $logo.Path -ContentType 'image/png' -Confirm:$false | Out-Null
+            for ($attempt = 1; $attempt -le 6; $attempt++) {
+                if ($attempt -gt 1) { Start-Sleep -Seconds 3 }
+                $currentHash = Read-ApplicationLogoHash $app.Id $downloadedLogo
+                if ($currentHash -eq $logo.Hash) { break }
+            }
+            if ($currentHash -ne $logo.Hash) {
+                throw "Graph accepted the logo upload, but the returned logo does not yet match. Previous logo backup: $logoBackup"
+            }
+            $logoStatus = 'Updated'
         }
-        Set-MgApplicationLogo -ApplicationId $app.Id -InFile $logo.FullName -ContentType 'image/png' -Confirm:$false | Out-Null
-        for ($attempt = 1; $attempt -le 6; $attempt++) {
-            if ($attempt -gt 1) { Start-Sleep -Seconds 3 }
-            $currentHash = Read-ApplicationLogoHash $app.Id $downloadedLogo
-            if ($currentHash -eq $logoHash) { break }
-        }
-        if ($currentHash -ne $logoHash) {
-            throw "Graph accepted the logo upload, but the returned logo does not yet match. Previous logo backup: $logoBackup"
-        }
-        $logoUpdated = $true
     }
 
     [pscustomobject] @{
@@ -224,8 +260,9 @@ try {
         ServicePrincipalId = $enterprise[0].Id
         Created = $created
         Provider = $provider
-        LogoUpdated = $logoUpdated
-        LogoSha256 = $logoHash
+        LogoUpdated = $logoStatus -eq 'Updated'
+        LogoStatus = $logoStatus
+        LogoSha256 = if ($null -ne $logo) { $logo.Hash }
         LogoBackupPath = $logoBackup
         BrokerRedirectUri = $brokerUri
         DelegatedPermissions = @($resources.Values)
@@ -233,5 +270,8 @@ try {
     }
 } finally {
     try { if ($connected) { Disconnect-MgGraph | Out-Null } }
-    finally { [IO.File]::Delete($downloadedLogo) }
+    finally {
+        [IO.File]::Delete($downloadedLogo)
+        if ($temporaryDefaultLogo) { [IO.File]::Delete($temporaryDefaultLogo) }
+    }
 }
