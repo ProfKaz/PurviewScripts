@@ -88,17 +88,21 @@ function Read-ApplicationLogoHash {
     param([string] $ApplicationId, [string] $Path)
 
     [IO.File]::Delete($Path)
-    try {
-        Get-MgApplicationLogo -ApplicationId $ApplicationId -OutFile $Path -ErrorAction Stop | Out-Null
-    } catch {
-        $status = $_.Exception.PSObject.Properties['ResponseStatusCode']
-        if ($null -ne $status -and [int]$status.Value -eq 404) { return $null }
-        throw
+    # Graph exposes the logo for reading through info.logoUrl on the application.
+    $application = Get-MgApplication -ApplicationId $ApplicationId -Property 'info'
+    if ($null -eq $application) { throw 'The application could not be read for logo verification.' }
+    if ($null -eq $application.Info -or [string]::IsNullOrWhiteSpace($application.Info.LogoUrl)) { return $null }
+
+    $uri = $null
+    if (-not [uri]::TryCreate($application.Info.LogoUrl, [UriKind]::Absolute, [ref] $uri) -or
+        $uri.Scheme -ne 'https' -or $uri.UserInfo) {
+        throw 'The application returned an invalid HTTPS logo URL.'
     }
-    if ([IO.File]::Exists($Path) -and [IO.FileInfo]::new($Path).Length -gt 0) {
-        return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+    Invoke-WebRequest -Uri $uri -OutFile $Path -Headers @{ 'Cache-Control' = 'no-cache' } -TimeoutSec 10 -MaximumRedirection 5
+    if (-not [IO.File]::Exists($Path) -or [IO.FileInfo]::new($Path).Length -eq 0) {
+        throw 'The application logo URL returned an empty download.'
     }
-    return $null
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
 }
 
 $tag = 'LocalMIPScanner.MipSdkAudit'
@@ -241,13 +245,21 @@ try {
                 [IO.File]::Copy($downloadedLogo, $logoBackup)
             }
             Set-MgApplicationLogo -ApplicationId $app.Id -InFile $logo.Path -ContentType 'image/png' -Confirm:$false | Out-Null
+            $verificationError = $null
             for ($attempt = 1; $attempt -le 6; $attempt++) {
-                if ($attempt -gt 1) { Start-Sleep -Seconds 3 }
-                $currentHash = Read-ApplicationLogoHash $app.Id $downloadedLogo
+                if ($attempt -gt 1) { Start-Sleep -Seconds 5 }
+                try {
+                    $currentHash = Read-ApplicationLogoHash $app.Id $downloadedLogo
+                    $verificationError = $null
+                } catch {
+                    $currentHash = $null
+                    $verificationError = $_.Exception.GetType().Name
+                }
                 if ($currentHash -eq $logo.Hash) { break }
             }
             if ($currentHash -ne $logo.Hash) {
-                throw "Graph accepted the logo upload, but the returned logo does not yet match. Previous logo backup: $logoBackup"
+                $detail = if ($verificationError) { " Last verification error: $verificationError." }
+                throw "Graph accepted the logo upload, but info.logoUrl did not return the expected PNG after six attempts. Previous logo backup: $logoBackup.$detail"
             }
             $logoStatus = 'Updated'
         }

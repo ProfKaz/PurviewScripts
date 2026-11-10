@@ -57,6 +57,8 @@ En el registro administrado, el script incluye **Kaz Demos** en la descripción 
 
 Al ejecutar una copia del script desde la raíz de la instalación, también se busca el logo en `labs/MipSdkAudit`. Si falta en ambas rutas, el script intenta descargar la versión publicada y comprueba su SHA-256. Si la descarga falla, el registro continúa, conserva el logo actual y devuelve `LogoStatus = Unavailable`. Usa `-LogoPath` para indicar un PNG local. [Descargar el PNG de Kaz Demos](https://raw.githubusercontent.com/ProfKaz/PurviewScripts/ea977502aedfd20f6bf3e73d813b1941c89b214e/labs/MipSdkAudit/kaz-demos-entra-215.png)
 
+Para respaldar y verificar el logo remoto, el script descarga el PNG mediante `info.logoUrl`. Después de cargarlo, reintenta la lectura mientras se propaga en la CDN. Si hay un logo previo con URL pero su descarga falla, el script se detiene antes de reemplazarlo. [Propiedades de marca en Microsoft Graph](https://learn.microsoft.com/graph/api/resources/informationalurl)
+
 ## Interpretar el resultado
 
 | Evento | Qué comprobar |
