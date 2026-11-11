@@ -160,6 +160,8 @@ try
                             authError = auth.ErrorCode
                         });
                     }
+                    if (settings!.FilePauseMilliseconds > 0)
+                        await Task.Delay(settings.FilePauseMilliseconds);
                 }
                 Emit(new { @event = "auditSummary", candidates = candidates.Count, evaluated = candidates.Count - failed, failed });
             }

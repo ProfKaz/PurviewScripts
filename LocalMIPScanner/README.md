@@ -103,6 +103,48 @@ Para un piloto, configura una tarea bajo la cuenta del usuario que puede leer la
 
 Para ejecutar por ventanas, usa un desencadenador periódico y la opción de omitir instancias nuevas mientras la tarea siga en ejecución (IgnoreNew). Para ejecución continua, usa un desencadenador al iniciar sesión y añade `-Continuous` `-IdleSeconds` 60. Revisa el límite total de ejecución de la tarea para el modo continuo. Los niveles de prioridad 7 y 8 están destinados al trabajo en segundo plano. Para varias raíces desde la tarea, usa un script de entrada que llame al scanner con un arreglo -Root. [Configuración de tareas en Microsoft Learn](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtasksettingsset?view=windowsserver2025-ps).
 
+## M5 · Medir consumo y ajustar la ejecución
+
+`Measure-LocalMIPScanner.ps1` ejecuta cada pasada en un proceso nuevo y mide CPU, memoria e I/O mediante los contadores de Windows. El muestreo predeterminado es de un segundo. Cada medición conserva `metrics.json`, `samples.csv`, la salida y los errores del proceso. El conjunto de pasadas queda en `summary.json`.
+
+| Escenario | Trabajo medido |
+| --- | --- |
+| `Inventory` | Descubrimiento incremental de metadatos. Es el escenario predeterminado. |
+| `ContentAudit` | Descubrimiento y lectura TXT/CSV con las reglas locales. |
+| `PolicyAudit` | Evaluación de un JSONL de hallazgos con la política de Purview y el inicio de sesión silencioso. |
+| `SdkSelfTest` | Prueba sintética del SDK sin conexión al tenant. |
+
+Desde la instalación, mide primero dos pasadas del inventario para comparar con las observaciones del Administrador de tareas. El resultado conserva el número de archivos nuevos, sin cambios y modificados, además de los tiempos de carga y consolidación.
+
+~~~powershell
+$measurements = .\Measure-LocalMIPScanner.ps1 -Scenario Inventory -Root 'C:\' -RunCount 2 -IdleSeconds 30
+$measurements | Select-Object scenario, run, elapsedMilliseconds, cpuMeanPercentOfMachine,
+    cpuPeakSamplePercentOfMachine, peakWorkingSetMiB, sampledPeakPrivateCommitMiB, readBytes, writeBytes, metricsFile
+~~~
+
+La medición usa la carpeta de logs habitual y guarda los informes dentro de ella para excluirlos del inventario. Si usas una carpeta de logs distinta, pasa la misma con `-LogDirectory`. El alcance y el estado conservan las reglas de reanudación de M2.1. Revisa `generationComplete` y `resumedDirectories` en `workload` para distinguir una generación completa de un tramo. Para comparar una primera pasada con una repetida desde cero, usa una copia de la configuración con una carpeta de estado dedicada.
+
+Para medir auditoría local, selecciona explícitamente una carpeta de piloto con archivos sintéticos. Después puedes medir el SDK con el JSONL de hallazgos de una pasada que tenga coincidencias mapeadas. Usa rutas completas al responder las preguntas.
+
+~~~powershell
+$pilotRoot = Read-Host 'Ruta de la carpeta de documentos del piloto'
+$scanConfig = Read-Host 'Ruta de la configuración aislada del scanner para ese piloto'
+$content = .\Measure-LocalMIPScanner.ps1 -Scenario ContentAudit -Root $pilotRoot -ConfigDirectory $scanConfig
+$auditLog = $content.workload[0].logFile
+$policyConfig = Read-Host 'Ruta completa de policy-audit.json'
+$policy = .\Measure-LocalMIPScanner.ps1 -Scenario PolicyAudit -PolicyConfig $policyConfig -AuditLog $auditLog -RunCount 2
+$policy | Select-Object scenario, run, cpuMeanPercentOfMachine, cpuPeakSamplePercentOfMachine,
+    peakWorkingSetMiB, sdkPolicyLoaded, metricsFile
+~~~
+
+El instalador del laboratorio devuelve `DotNetPath` y `LabAssembly`. Puedes pasarlos explícitamente a la medición con esos mismos nombres de parámetro. `sdkPolicyLoaded` confirma que se cargó una política. Si no hay candidatos mapeados, el laboratorio devuelve un resumen vacío y ese indicador permanece en `false`.
+
+La CPU media usa el tiempo de CPU del proceso dividido por la duración y por los procesadores lógicos disponibles. La CPU pico corresponde al mayor intervalo observado. La memoria incluye el pico de conjunto de trabajo reportado por Windows y los máximos muestreados de conjunto de trabajo y memoria privada comprometida. Los I/O son contadores de bytes transferidos por el proceso e incluyen operaciones atendidas desde caché. El informe mide el proceso trabajador. El consumo de servicios compartidos de Windows, como WAM, se observa por separado en el equipo. [Tiempos de proceso](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getprocesstimes), [memoria de proceso](https://learn.microsoft.com/en-us/windows/win32/api/psapi/ns-psapi-process_memory_counters_ex), [contadores de I/O](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-io_counters)
+
+Para comparar ajustes, conserva la misma raíz, el mismo estado de caché y las mismas reglas. Cambia un ajuste por ensayo y registra también la duración y los errores. `-Priority BelowNormal` reduce la prioridad del trabajador durante la medición. Las pausas de enumeración siguen en `performance.json`. El laboratorio admite `filePauseMilliseconds` en `policy-audit.json` para espaciar los candidatos de una evaluación. El valor predeterminado es cero. Los límites de tiempo del recorrido se comprueban al terminar cada directorio y dejan fuera la carga y la consolidación.
+
+La aceptación de M5 requiere medir una muestra representativa en Windows 365 con las aplicaciones habituales del usuario abiertas y acordar límites de CPU, memoria e I/O con esos resultados. La prueba local `tests/Test-Measurement.ps1` comprueba la captura de métricas, las pasadas independientes, la reutilización y la conservación de errores del trabajador.
+
 ## Pruebas de M2.1
 
 Desde el directorio LocalMIPScanner, ejecuta cada prueba en un proceso PowerShell independiente sobre archivos sintéticos.

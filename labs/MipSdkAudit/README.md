@@ -96,6 +96,8 @@ El laboratorio procesa únicamente coincidencias mapeadas de un JSONL cerrado de
 
 Revisa `suppliedSits`, `actions`, `recommendedLabelIds` y `requiredLabelIds`. La salida describe las acciones propuestas por la política. El piloto mantiene los archivos en solo lectura y deja la aplicación de etiquetas para una etapa posterior. `maxFiles` limita los candidatos por JSONL. Si se supera, reduce el alcance o divide el recorrido en tramos.
 
+Para medir el consumo del SDK usa el escenario `PolicyAudit` de [Measure-LocalMIPScanner.ps1](../../LocalMIPScanner/Measure-LocalMIPScanner.ps1). Puedes configurar `filePauseMilliseconds` entre 0 y 10.000 en el JSON de política. El laboratorio espera ese tiempo tras evaluar cada candidato. El valor predeterminado es cero para conservar el comportamiento del piloto existente.
+
 ## M4 · Aplicar y verificar una etiqueta en una copia de Office
 
 Usa la configuración de la prueba WAM y un documento de prueba local sin etiqueta ni protección. El modo de escritura admite Word `.docx`, Excel `.xlsx` y PowerPoint `.pptx` de hasta 32 MiB. El origen y el destino deben estar dentro de las raíces del piloto. Usa un nombre de salida nuevo con la misma extensión.
