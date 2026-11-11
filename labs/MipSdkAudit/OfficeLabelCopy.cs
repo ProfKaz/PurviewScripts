@@ -46,7 +46,7 @@ sealed record OfficeLabelCopy(string Source, string Output, Guid LabelId)
         label.HasRightsManagementPolicy || label.HasDoNotForwardProtection ||
         label.HasEncryptOnlyProtection || label.HasAdhocProtection || !string.IsNullOrEmpty(label.DoubleKeyUrl);
 
-    public async Task ApplyAsync(IFileEngine engine, MipContext context)
+    public async Task ApplyAsync(IFileEngine engine, MipContext context, bool reportActivity = false)
     {
         var label = LeafLabels(engine.SensitivityLabels).FirstOrDefault(item =>
             Guid.TryParse(item.Id, out var id) && id == LabelId);
@@ -75,15 +75,15 @@ sealed record OfficeLabelCopy(string Source, string Output, Guid LabelId)
         bool ownsTemporary = false;
         try
         {
-            using (var input = File.Open(Source, FileMode.Open, FileAccess.Read, FileShare.Read))
-            using (var handler = await OpenHandler(engine, input, Source))
-            {
-                handler.SetLabel(label, new LabelingOptions { AssignmentMethod = AssignmentMethod.Standard },
-                    new ProtectionSettings());
-                if (!string.Equals(Path.GetExtension(handler.OutputFileName), extension, StringComparison.OrdinalIgnoreCase))
-                    throw new AuditInputException("sdk_requested_extension_change");
+            using var input = File.Open(Source, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var handler = await OpenHandler(engine, input, Source);
+            handler.SetLabel(label, new LabelingOptions { AssignmentMethod = AssignmentMethod.Standard },
+                new ProtectionSettings());
+            if (!string.Equals(Path.GetExtension(handler.OutputFileName), extension, StringComparison.OrdinalIgnoreCase))
+                throw new AuditInputException("sdk_requested_extension_change");
 
-                using var staged = File.Open(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
+            using (var staged = File.Open(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+            {
                 ownsTemporary = true;
                 if (!await handler.CommitAsync(staged))
                     throw new AuditInputException("office_label_commit_failed");
@@ -111,11 +111,22 @@ sealed record OfficeLabelCopy(string Source, string Output, Guid LabelId)
             AuditCandidate.AssertLocalPath(directory);
             File.Move(temporary, Output);
             ownsTemporary = false;
+            if (reportActivity)
+                handler.NotifyCommitSuccessful(Output);
         }
         finally
         {
             if (ownsTemporary) File.Delete(temporary);
         }
+    }
+
+    public async Task<string?> ReadLabelForDiscoveryAsync(IFileEngine engine)
+    {
+        AuditCandidate.AssertLocalPath(Output);
+        using var stream = File.Open(Output, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var handler = await engine.CreateFileHandlerAsync(stream, Output, isAuditDiscoveryEnabled: true,
+            isGetSensitivityLabelAuditDiscoveryEnabled: true);
+        return handler.Label?.Label.Id;
     }
 
     private static Task<IFileHandler> OpenHandler(IFileEngine engine, Stream stream, string path) =>

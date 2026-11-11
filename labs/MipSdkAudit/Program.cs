@@ -16,6 +16,7 @@ if (args is ["--help"] or [])
     Console.WriteLine("MipSdkAudit --config <config.json> --audit-log <inventory.jsonl>");
     Console.WriteLine("MipSdkAudit --list-office-labels <config.json>");
     Console.WriteLine("MipSdkAudit --apply-office-copy <config.json> <source> <output> <label-guid>");
+    Console.WriteLine("MipSdkAudit --office-activity-pilot <config.json> <source> <output> <label-guid>");
     Console.WriteLine("MipSdkAudit --self-test");
     return 0;
 }
@@ -24,7 +25,8 @@ bool selfTest = args is ["--self-test"];
 bool checkSso = args is ["--check-sso", _];
 bool auditLog = args is ["--config", _, "--audit-log", _];
 bool listOfficeLabels = args is ["--list-office-labels", _];
-bool applyOfficeCopy = args is ["--apply-office-copy", _, _, _, _];
+bool activityPilot = args is ["--office-activity-pilot", _, _, _, _];
+bool applyOfficeCopy = activityPilot || args is ["--apply-office-copy", _, _, _, _];
 bool silentMode = checkSso || auditLog || listOfficeLabels || applyOfficeCopy;
 Guid tenantId = default, clientId = default, sitId = default;
 if (!selfTest && !silentMode && (args.Length is < 3 or > 4 ||
@@ -89,7 +91,11 @@ try
     var configuration = new MipConfiguration(app, fixture.FullName,
         Microsoft.InformationProtection.LogLevel.Error, selfTest, CacheStorageType.InMemory)
     {
-        DiagnosticOverride = new DiagnosticConfiguration { IsMinimalTelemetryEnabled = true },
+        DiagnosticOverride = new DiagnosticConfiguration
+        {
+            IsMinimalTelemetryEnabled = !activityPilot,
+            IsFastShutdownEnabled = false
+        },
         LoggerDelegateOverride = new LabLogger()
     };
     using var context = MIP.CreateMipContext(configuration);
@@ -175,12 +181,24 @@ try
             else if (officeCopy is not null)
             {
                 stage = "applyAndVerifyOfficeCopy";
-                await officeCopy.ApplyAsync(engine, context);
+                if (activityPilot)
+                    Emit(new { @event = "officeActivityPilot", startedUtc = DateTimeOffset.UtcNow,
+                        applicationId = app.ApplicationId, applicationName = app.ApplicationName,
+                        applicationVersion = app.ApplicationVersion, userId = user, output = officeCopy.Output });
+                await officeCopy.ApplyAsync(engine, context, reportActivity: activityPilot);
                 Emit(new
                 {
                     @event = "officeCopyLabeled", source = officeCopy.Source, output = officeCopy.Output,
                     labelId = officeCopy.LabelId, verified = true, sourceUnchanged = true, protectionApplied = false
                 });
+                if (activityPilot)
+                {
+                    Emit(new { @event = "officeChangeNotified", utc = DateTimeOffset.UtcNow, path = officeCopy.Output });
+                    stage = "readOfficeLabelForDiscovery";
+                    var existingLabelId = await officeCopy.ReadLabelForDiscoveryAsync(engine);
+                    Emit(new { @event = "officeLabelRead", utc = DateTimeOffset.UtcNow, path = officeCopy.Output,
+                        labelId = existingLabelId, discoveryEnabled = true });
+                }
             }
             else if (!checkSso)
             {
