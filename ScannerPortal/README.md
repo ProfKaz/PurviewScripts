@@ -26,7 +26,7 @@ pwsh -NoProfile -File ./ScannerPortal/tests/Test-ActivityScope.ps1
 
 `config/scanner-profile.example.json` es un contrato ilustrativo sin secretos. No debe entregarse directamente al scanner: el adaptador de SP2 lo materializará en los cinco archivos que consume actualmente. `deployment/solution-manifest.json` describe los recursos previstos; aún no los aprovisiona.
 
-`deployment/New-ScannerPortalPilot.ps1` permite preparar el plan y, con `-Mode Apply`, crear el sitio piloto mediante PnP y login de Microsoft. Es solo la fase de sitio: no aprovisiona listas ni despliega SPFx. Ver [preparación del piloto](docs/PILOT-SETUP.md).
+`deployment/New-ScannerPortalPilot.ps1` permite preparar el plan y, con `-Mode Apply`, crear el sitio piloto mediante PnP y login de Microsoft. `-DeployFoundation` agrega bibliotecas y listas vacías y una portada nativa, tras comprobar permisos. Todavía no despliega SPFx. Ver [preparación del piloto](docs/PILOT-SETUP.md).
 
 `deployment/Register-ScannerPortalSetupApp.ps1` prepara o registra una aplicación interactiva dedicada por tenant, sin secreto de cliente. El código es reutilizable; cada instalación conserva su propio Client ID público. Ver también [identidad Kaz Demos](docs/BRANDING.md).
 

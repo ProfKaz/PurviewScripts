@@ -5,6 +5,7 @@ Plans or creates a dedicated SharePoint communication site for Scanner Portal te
 .DESCRIPTION
 Default mode is offline Plan. Apply authenticates interactively with a tenant-owned
 Entra application. No passwords, tokens, certificates or app secrets are accepted.
+Optionally deploys an empty native SharePoint foundation after owner-only access checks.
 Does not deploy SPFx, profiles, agents or modify an existing site's permissions.
 #>
 [CmdletBinding(SupportsShouldProcess)]
@@ -17,6 +18,7 @@ param(
     [guid]$ClientId = [guid]::Empty,
     [string]$Tenant,
     [ValidateSet('Interactive', 'DeviceLogin')][string]$LoginMethod = 'Interactive',
+    [switch]$DeployFoundation,
     [ValidateSet(1033, 3082)][int]$Lcid = 3082
 )
 Set-StrictMode -Version Latest
@@ -36,7 +38,7 @@ if ($SiteUrl.Scheme -ne 'https' -or $SiteUrl.Host -ne $expectedHost -or
 if ($Owner -notmatch '^[^\s@]+@[^\s@]+\.[^\s@]+$') { throw 'Owner must be a user UPN.' }
 $siteAddress = $SiteUrl.AbsoluteUri.TrimEnd('/')
 $plan = [pscustomobject]@{
-    Stage = 'SiteOnly'
+    Stage = if ($DeployFoundation) { 'SiteAndFoundation' } else { 'SiteOnly' }
     AdminUrl = $AdminUrl.AbsoluteUri.TrimEnd('/')
     SiteUrl = $siteAddress
     Title = $Title
@@ -79,13 +81,14 @@ try {
     }
     New-PnPSite -Type CommunicationSite -Title $Title -Url $siteAddress -Owner $Owner -Lcid $Lcid `
         -Wait -Connection $adminConnection | Out-Null
+    Write-Host "Site created: $siteAddress. Verifying sharing and permissions."
     # No content is uploaded. If this fails, stop and report the created site for recovery.
     Set-PnPTenantSite -Identity $siteAddress -SharingCapability Disabled -Connection $adminConnection
     $created = Get-PnPTenantSite -Identity $siteAddress -Detailed -Connection $adminConnection
     if ([string]$created.SharingCapability -ne 'Disabled') {
         throw "Site created at $siteAddress, but disabling external sharing could not be verified. Do not upload data."
     }
-    $siteConnection = Connect-PnPOnline -Url $siteAddress @login
+    $siteConnection = Connect-PnPOnline -Url $siteAddress -Connection $adminConnection @login
     $web = Get-PnPWeb -Includes RoleAssignments,AssociatedOwnerGroup,AssociatedMemberGroup,AssociatedVisitorGroup `
         -Connection $siteConnection
     $groups = foreach ($group in @($web.AssociatedOwnerGroup, $web.AssociatedMemberGroup, $web.AssociatedVisitorGroup)) {
@@ -112,6 +115,10 @@ try {
         Groups = @($groups)
         RoleAssignments = @($assignments)
         NextStep = 'Review site permissions, then provision restricted libraries/lists. SPFx is not deployed.'
+    }
+    if ($DeployFoundation) {
+        & (Join-Path $PSScriptRoot 'Install-ScannerPortalFoundation.ps1') -SiteUrl $siteAddress -Owner $Owner `
+            -Mode Apply -AdminConnection $adminConnection -SiteConnection $siteConnection
     }
 }
 finally {

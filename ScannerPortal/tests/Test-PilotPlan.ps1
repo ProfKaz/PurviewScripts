@@ -51,4 +51,13 @@ try { & $registerPath -Tenant 'https://example.onmicrosoft.com/' | Out-Null } ca
 if (-not $failed) { throw 'Application registration accepted a URL instead of a tenant identifier.' }
 $null = [Management.Automation.Language.Parser]::ParseFile($registerPath, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw ($errors.Message -join '; ') }
-'PASS: site and application offline plans, WhatIf without authentication, permissions, input validation, and PowerShell syntax.'
+$foundationPath = Join-Path $PSScriptRoot '../deployment/Install-ScannerPortalFoundation.ps1'
+$foundation = & $foundationPath -SiteUrl $arguments.SiteUrl -Owner $arguments.Owner -Mode Apply -WhatIf
+if ($foundation.Libraries.Count -ne 2 -or $foundation.Lists.Count -ne 6 -or $foundation.DeploysSPFx -or $foundation.UploadsScannerData) {
+    throw 'Foundation plan contains unexpected resources or scope.'
+}
+$combined = & $scriptPath @arguments -DeployFoundation
+if ($combined.Stage -ne 'SiteAndFoundation') { throw 'Combined plan does not include foundation.' }
+$null = [Management.Automation.Language.Parser]::ParseFile($foundationPath, [ref]$tokens, [ref]$errors)
+if ($errors.Count) { throw ($errors.Message -join '; ') }
+'PASS: application, site and foundation offline plans, WhatIf, permissions, input validation, and PowerShell syntax.'

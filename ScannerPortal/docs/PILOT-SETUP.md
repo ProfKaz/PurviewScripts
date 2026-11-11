@@ -1,6 +1,6 @@
 # Primera prueba: creación del sitio piloto
 
-Esta fase crea únicamente un sitio de comunicación vacío. No instala el portal SPFx ni publica perfiles, eventos o credenciales. `Install-ScannerPortal.ps1` continúa pendiente. No reutiliza ni cambia automáticamente un sitio existente.
+Esta fase crea un sitio de comunicación y puede aprovisionar una base vacía con `-DeployFoundation`. No instala el portal SPFx ni publica perfiles, eventos o credenciales. El instalador integral sigue pendiente. No reutiliza ni cambia automáticamente un sitio existente.
 
 ## Datos no secretos necesarios
 
@@ -51,7 +51,7 @@ Con PowerShell 7.4+ y PnP.PowerShell 3.2.0 o superior:
   -Owner admin@contoso.onmicrosoft.com `
   -Tenant contoso.onmicrosoft.com `
   -ClientId 00000000-0000-0000-0000-000000000001 `
-  -Mode Apply
+  -Mode Apply -DeployFoundation
 ```
 
 El Client ID del ejemplo es ficticio. El script usa login interactivo; `-LoginMethod DeviceLogin` permite completar el login mediante el código que Microsoft muestre, si la política del tenant lo permite. Puede solicitar sesión para administración y para el sitio. Nunca copiar códigos MFA al chat.
@@ -59,6 +59,14 @@ El Client ID del ejemplo es ficticio. El script usa login interactivo; `-LoginMe
 El script comprueba que ambas URLs pertenecen al mismo tenant comercial y que el destino es `/sites/<alias>`. Consulta existencia antes de crear; un fallo de consulta detiene la operación. Si existe, devuelve `AlreadyExistsNeedsReview` y no cambia nada. Tras crear, deshabilita compartir externamente y devuelve grupos y asignaciones de roles para su revisión. No afirma que el sitio sea privado solo por haberlo creado: políticas/plantillas del tenant pueden conceder acceso adicional y los administradores conservan acceso.
 
 Si falla después de crear, conservar la URL y revisar el estado; no elimina el sitio ni borra recursos como compensación automática. Una segunda ejecución detecta la existencia y pide revisión operativa, sin recrear ni alterar el sitio.
+
+## Base nativa del piloto
+
+`-DeployFoundation` llama a `Install-ScannerPortalFoundation.ps1` con las conexiones activas después de crear el sitio. Comprueba uso compartido externo deshabilitado, sitio/identidad esperados y que no haya asignaciones o administradores configurados fuera del propietario. Un hallazgo bloquea el aprovisionamiento. Los administradores del tenant conservan sus facultades administrativas.
+
+La base crea dos bibliotecas vacías ocultas, sin indexación de búsqueda y con permisos únicos, seis listas vacías con columnas indexadas y una página moderna nativa con «Powered by Kaz Demos». Todavía no hay telemetría, administración de perfiles desde la interfaz ni paquete SPFx. No se conceden permisos a agentes. La lista de recursos se lee de `deployment/solution-manifest.json`; las columnas iniciales solo cubren los índices y no equivalen a los contratos completos de ingesta.
+
+Para reintentar solo la base después de un fallo parcial, usar `Install-ScannerPortalFoundation.ps1 -Mode Apply -SiteUrl <url> -Owner <upn> -AdminConnection $admin -SiteConnection $site` con conexiones PnP explícitas y aprobadas al sitio piloto. Si no se pasan conexiones, el modo predeterminado devuelve el plan. No se eliminan recursos; conservar el sitio para revisar errores.
 
 ## Evidencia de pruebas
 
