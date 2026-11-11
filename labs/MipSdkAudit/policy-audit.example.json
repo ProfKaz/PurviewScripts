@@ -9,5 +9,6 @@
       "confidence": 85
     }
   ],
-  "maxFiles": 50
+  "maxFiles": 50,
+  "filePauseMilliseconds": 0
 }

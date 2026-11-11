@@ -7,7 +7,7 @@ sealed record SitEvidence(int Count, int Confidence);
 
 sealed record RuleMapping(string RuleId, Guid SitId, int Confidence);
 sealed record AuditSettings(Guid TenantId, Guid ClientId, string[] Roots, RuleMapping[] Rules,
-    string? ExpectedUser = null, int MaxFiles = 50)
+    string? ExpectedUser = null, int MaxFiles = 50, int FilePauseMilliseconds = 0)
 {
     public bool ContainsPath(string path) => Roots.Any(root => path.StartsWith(
         root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
@@ -26,6 +26,7 @@ sealed record AuditSettings(Guid TenantId, Guid ClientId, string[] Roots, RuleMa
             settings.Roots is not { Length: >= 1 and <= 32 } ||
             settings.Rules is not { Length: >= 1 and <= 32 } ||
             settings.MaxFiles is < 1 or > 250 ||
+            settings.FilePauseMilliseconds is < 0 or > 10000 ||
             (settings.ExpectedUser is { } user && (!user.Contains('@') || user.Any(char.IsWhiteSpace))))
             throw new AuditInputException("invalid_configuration");
 
