@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "0.1",
+  "status": "design-only",
+  "solution": "ScannerPortal",
+  "libraries": [
+    {"name": "ScannerPortalConfig", "hidden": true, "versioning": true, "breakInheritance": true},
+    {"name": "ScannerPortalLanding", "hidden": true, "breakInheritance": true}
+  ],
+  "lists": [
+    {"name": "ScannerRegistry", "indexedFields": ["ScannerId", "LastSeenUtc"]},
+    {"name": "ScanRuns", "indexedFields": ["RunId", "ScannerId", "StartedUtc"]},
+    {"name": "ContentFindings", "indexedFields": ["EventId", "EventTimeUtc", "ScannerId", "DeviceId", "RuleId"]},
+    {"name": "LabelActivities", "indexedFields": ["EventId", "EventTimeUtc", "ScannerId", "DeviceId", "AccountId"]},
+    {"name": "IngestionRuns", "indexedFields": ["BatchId", "Source", "FinishedUtc"]},
+    {"name": "DashboardDaily", "indexedFields": ["DateUtc", "ScannerId"]}
+  ],
+  "roles": ["PortalAdministrators", "ConfigurationPublishers", "Analysts"],
+  "requiredFutureArtifacts": ["Install-ScannerPortal.ps1", "Sync-ScannerProfile.ps1", "scanner-portal.sppkg"]
+}

@@ -14,8 +14,6 @@ if (args is ["--help"] or [])
     Console.WriteLine("MipSdkAudit <tenant-guid> <client-guid> <test-user-upn> [sit-guid]");
     Console.WriteLine("MipSdkAudit --check-sso <config.json>");
     Console.WriteLine("MipSdkAudit --config <config.json> --audit-log <inventory.jsonl>");
-    Console.WriteLine("MipSdkAudit --list-office-labels <config.json>");
-    Console.WriteLine("MipSdkAudit --apply-office-copy <config.json> <source> <output> <label-guid>");
     Console.WriteLine("MipSdkAudit --self-test");
     return 0;
 }
@@ -23,9 +21,7 @@ if (args is ["--help"] or [])
 bool selfTest = args is ["--self-test"];
 bool checkSso = args is ["--check-sso", _];
 bool auditLog = args is ["--config", _, "--audit-log", _];
-bool listOfficeLabels = args is ["--list-office-labels", _];
-bool applyOfficeCopy = args is ["--apply-office-copy", _, _, _, _];
-bool silentMode = checkSso || auditLog || listOfficeLabels || applyOfficeCopy;
+bool silentMode = checkSso || auditLog;
 Guid tenantId = default, clientId = default, sitId = default;
 if (!selfTest && !silentMode && (args.Length is < 3 or > 4 ||
     !Guid.TryParse(args[0], out tenantId) || tenantId == Guid.Empty ||
@@ -50,9 +46,6 @@ LabConsent? consent = null;
 try
 {
     AuditSettings? settings = silentMode ? AuditSettings.Read(args[1]) : null;
-    stage = "validateOfficeCopy";
-    OfficeLabelCopy? officeCopy = applyOfficeCopy
-        ? OfficeLabelCopy.Prepare(settings!, args[2], args[3], args[4]) : null;
     stage = "readAuditLog";
     List<AuditCandidate> candidates = auditLog ? AuditCandidate.ReadLog(args[3], settings!) : [];
     if (auditLog && candidates.Count == 0)
@@ -101,13 +94,8 @@ try
             stage = "selfTest";
             VerifySyntheticCallback();
             VerifyAuditInput(fixture.FullName);
-            VerifyOfficeInput(fixture.FullName, sample, context);
             _ = new LabAuth(Guid.NewGuid(), Guid.NewGuid(), null, windowsSilent: true);
-            Emit(new
-            {
-                @event = "selfTest", nativeSdkInitialized = true, syntheticCallbackPassed = true,
-                mappedAuditPassed = true, officeInputGuardsPassed = true
-            });
+            Emit(new { @event = "selfTest", nativeSdkInitialized = true, syntheticCallbackPassed = true, mappedAuditPassed = true });
         }
         else
         {
@@ -162,23 +150,6 @@ try
                     }
                 }
                 Emit(new { @event = "auditSummary", candidates = candidates.Count, evaluated = candidates.Count - failed, failed });
-            }
-            else if (listOfficeLabels)
-            {
-                stage = "listOfficeLabels";
-                foreach (var label in OfficeLabelCopy.LeafLabels(engine.SensitivityLabels).Where(item => item.IsActive))
-                    Emit(new { @event = "officeLabel", labelId = label.Id, name = label.Name,
-                        addsProtection = OfficeLabelCopy.AddsProtection(label) });
-            }
-            else if (officeCopy is not null)
-            {
-                stage = "applyAndVerifyOfficeCopy";
-                await officeCopy.ApplyAsync(engine, context);
-                Emit(new
-                {
-                    @event = "officeCopyLabeled", source = officeCopy.Source, output = officeCopy.Output,
-                    labelId = officeCopy.LabelId, verified = true, sourceUnchanged = true, protectionApplied = false
-                });
             }
             else if (!checkSso)
             {
@@ -290,53 +261,6 @@ static void VerifyAuditInput(string directory)
         throw new InvalidOperationException("Stale audit evidence was accepted.");
     }
     catch (AuditInputException error) when (error.Message == "file_changed_since_audit") { }
-}
-
-static void VerifyOfficeInput(string directory, string word, MipContext context)
-{
-    var id = Guid.NewGuid();
-    var settings = new AuditSettings(id, id, [directory], [new("fixture-rule", id, 85)]);
-    using var statusInput = System.IO.File.Open(word, FileMode.Open, FileAccess.Read, FileShare.Read);
-    var status = FileHandler.GetFileStatus(statusInput, word, context, null);
-    if (status.IsLabeled() || status.IsProtected() || status.ContainsProtectedObjects())
-        throw new InvalidOperationException("Synthetic Word fixture should be unlabeled and unprotected.");
-
-    var label = id.ToString();
-    string wordOutput = Path.Combine(directory, "word-copy.docx");
-    _ = OfficeLabelCopy.Prepare(settings, word, wordOutput, label);
-    Reject(() => OfficeLabelCopy.Prepare(settings, word, word, label), "output_must_be_new");
-    string existing = Path.Combine(directory, "existing.docx");
-    System.IO.File.WriteAllText(existing, "existing fixture");
-    Reject(() => OfficeLabelCopy.Prepare(settings, word, existing, label), "output_must_be_new");
-    if (System.IO.File.ReadAllText(existing) != "existing fixture")
-        throw new InvalidOperationException("Input validation modified an existing output.");
-    Reject(() => OfficeLabelCopy.Prepare(settings, word, Path.Combine(directory, "copy.xlsx"), label),
-        "output_extension_must_match");
-    Reject(() => OfficeLabelCopy.Prepare(settings, word, Path.Combine(directory, "..", "copy.docx"), label),
-        "office_path_outside_configured_roots");
-    Reject(() => OfficeLabelCopy.Prepare(settings, Path.Combine(directory, "fixture.txt"),
-        Path.Combine(directory, "copy.txt"), label), "office_format_required");
-
-    var disguised = Path.Combine(directory, "disguised.docx");
-    System.IO.File.WriteAllText(disguised, "plain text");
-    Reject(() => OfficeLabelCopy.Prepare(settings, disguised, wordOutput, label), "office_package_required");
-
-    foreach (var (extension, part) in new[] { (".xlsx", "xl/workbook.xml"), (".pptx", "ppt/presentation.xml") })
-    {
-        var input = Path.Combine(directory, "format-fixture" + extension);
-        using (var archive = ZipFile.Open(input, ZipArchiveMode.Create))
-            foreach (var entry in new[] { "[Content_Types].xml", "_rels/.rels", part })
-                archive.CreateEntry(entry);
-        _ = OfficeLabelCopy.Prepare(settings, input, Path.Combine(directory, "copy" + extension), label);
-    }
-    if (System.IO.File.Exists(wordOutput)) throw new InvalidOperationException("Input validation created a copy.");
-
-    static void Reject(System.Action check, string reason)
-    {
-        try { check(); }
-        catch (AuditInputException error) when (error.Message == reason) { return; }
-        throw new InvalidOperationException($"The Office copy guard did not reject {reason}.");
-    }
 }
 
 static void CreateSample(string path)

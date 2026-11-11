@@ -38,7 +38,7 @@ Flujo propuesto: configuración → descubrimiento → decisión incremental →
 | M1 | Inventario configurable de solo lectura con registros locales | Omitir exclusiones, continuar ante errores y verificar la integridad de los archivos. |
 | M2 | Índice local y reescaneo incremental | Una segunda ejecución reutiliza resultados. Cambios, expiración y fallos vuelven a habilitar el análisis. Una interrupción conserva el último estado confirmado. |
 | M3 | Detección de contenido configurable | Medir falsos positivos y negativos con un corpus sintético por regla y por formato. Probar el SDK y -AutoLabel en un tenant de laboratorio. |
-| M4 | Integración MIP | Aplicar una etiqueta sin protección a una copia de Word, Excel o PowerPoint con escritura habilitada explícitamente. Verificar el ID, la extensión y la integridad del original. |
+| M4 | Integración MIP | Validar la decisión en auditoría y, con escritura habilitada en el laboratorio, aplicar y verificar etiquetas según política y formato. |
 | M5 | Optimización | Medir impacto con una muestra representativa y fijar límites operativos de CPU, memoria e I/O. |
 | M6 | Operación | Validar la identidad de la tarea programada, la recuperación tras interrupciones y la retención de registros. |
 

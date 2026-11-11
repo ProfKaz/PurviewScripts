@@ -95,26 +95,3 @@ $run = .\Invoke-LocalMIPScanner.ps1 -Root 'C:\Datos\PilotoM3' -AuditContent
 El laboratorio procesa únicamente coincidencias mapeadas de un JSONL cerrado dentro de las raíces autorizadas. Comprueba el SHA-256 del archivo bajo un descriptor de solo lectura antes de entregar los recuentos a MIP. Si cambia el archivo, emite `auditFileError`. Si falla el acceso al tenant, puedes reprocesar el mismo JSONL cuando se resuelva el acceso y el archivo siga intacto. Los registros de auditoría local de versiones anteriores carecen de la huella requerida. La primera pasada tras actualizar vuelve a evaluar el contenido para generar el formato nuevo.
 
 Revisa `suppliedSits`, `actions`, `recommendedLabelIds` y `requiredLabelIds`. La salida describe las acciones propuestas por la política. El piloto mantiene los archivos en solo lectura y deja la aplicación de etiquetas para una etapa posterior. `maxFiles` limita los candidatos por JSONL. Si se supera, reduce el alcance o divide el recorrido en tramos.
-
-## M4 · Aplicar y verificar una etiqueta en una copia de Office
-
-Usa la configuración de la prueba WAM y un documento de prueba local sin etiqueta ni protección. El modo de escritura admite Word `.docx`, Excel `.xlsx` y PowerPoint `.pptx` de hasta 32 MiB. El origen y el destino deben estar dentro de las raíces del piloto. Usa un nombre de salida nuevo con la misma extensión.
-
-~~~powershell
-& $lab.DotNetPath $lab.LabAssembly --list-office-labels $policyConfig
-~~~
-
-La lista muestra el ID, el nombre y si cada etiqueta activa sin subetiquetas agrega protección. Elige una etiqueta de prueba que se aplique a archivos y devuelva `addsProtection: false`. Para el piloto, el operador indica el ID de la etiqueta que desea aplicar.
-
-~~~powershell
-$source = Join-Path $root 'prueba.docx'
-$output = Join-Path $root "prueba-etiquetada-$([guid]::NewGuid().ToString('N')).docx"
-$labelId = Read-Host 'Id de la etiqueta de prueba sin protección'
-& $lab.DotNetPath $lab.LabAssembly --apply-office-copy $policyConfig $source $output $labelId
-~~~
-
-El laboratorio comprueba el formato y el estado del original, aplica la etiqueta a un archivo temporal y lo reabre con el SDK para verificar el ID y el estado de protección. Publica la copia únicamente después de verificar también el hash y la fecha de escritura del original. El resultado esperado es `officeCopyLabeled` con `verified: true`, `sourceUnchanged: true` y `protectionApplied: false`. Abre la copia en Office para comprobar que la etiqueta se muestra y que el documento conserva su formato. [Aplicar y leer una etiqueta con MIP File SDK](https://learn.microsoft.com/en-us/information-protection/develop/quick-file-set-get-label-csharp)
-
-El modo `--audit-log` mantiene su función de auditoría. Los archivos TXT y CSV se pueden analizar para obtener hallazgos. La escritura de M4 se limita a los formatos Office indicados. La protección de texto con MIP puede cambiar la extensión, por ejemplo de `.txt` a `.ptxt`. [Formatos compatibles con MIP File SDK](https://learn.microsoft.com/en-us/information-protection/develop/concept-supported-filetypes)
-
-La prueba sin conexión comprueba el estado del DOCX sintético, las validaciones de rutas, las extensiones y la estructura básica del paquete. La escritura y la comprobación visual en Word, Excel o PowerPoint requieren la prueba autenticada con una etiqueta publicada en el tenant.
