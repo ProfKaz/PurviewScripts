@@ -6,7 +6,7 @@ Cada milestone se cierra por evidencia de aceptación, no por porcentaje de arch
 | --- | --- | --- | --- |
 | SP0 — Diagnóstico y arquitectura | Completado | — | Inventario local/remoto, riesgos de exportación, arquitectura, decisiones y contratos documentados. Revisión estática; sin afirmar validación del tenant. |
 | SP1 — Contratos y alcance de eventos | En curso | SP0 | Esquemas versionados, muestras sintéticas, consultas User obligatorias y pruebas negativas. Validar campos reales de usuario/dispositivo/event ID y cuentas de cada scanner en laboratorio. |
-| SP2 — Aprovisionamiento y configuración central | Pendiente | SP1 | Instalador PowerShell idempotente desde release GitHub, bibliotecas/listas, índices, ACL, perfiles versionados y sincronizador local. Segunda instalación sin duplicados; usuario no autorizado recibe 403; equipo recupera última versión válida. |
+| SP2 — Aprovisionamiento y configuración central | En curso (preparación del piloto) | SP1 | Instalador PowerShell idempotente desde release GitHub, bibliotecas/listas, índices, ACL, perfiles versionados y sincronizador local. Segunda instalación sin duplicados; usuario no autorizado recibe 403; equipo recupera última versión válida. |
 | SP3 — Ingesta restringida y recuperable | Pendiente | SP1, SP2 | Adaptar AE y logs locales, checkpoint después de publicación, outbox y deduplicación. Cuentas ajenas jamás llegan a CSV/JSON/ADX/SharePoint. Fallo de carga y reinicio sin pérdida ni doble conteo. |
 | SP4 — Portal SPFx y reportes | Pendiente | SP2, SP3 | Paquete sppkg, Inicio, Perfiles, Scanners, contenido y actividades. Consultas indexadas/paginadas, permisos efectivos y filtros reales. Medir latencia y escala; validar contraste, teclado y procedencia. |
 | SP5 — Instalación desde GitHub y piloto integral | Pendiente | SP4 | Release verificable, instalación limpia, actualización/rollback, smoke test extremo a extremo y runbook. Evidencia con scanner oficial y Local MIP Scanner. |
@@ -26,6 +26,8 @@ Cada milestone se cierra por evidencia de aceptación, no por porcentaje de arch
 
 ### SP2
 
+- [x] Scripts iniciales de plan/registro de aplicación interactiva y creación aislada de sitio, con pruebas offline. No equivalen al instalador integral ni a validación del tenant.
+- [x] Validar el registro de la aplicación, la creación de un sitio piloto y la base nativa vacía en un tenant de laboratorio. Ver [evidencia del piloto](PILOT-SETUP.md#evidencia-de-pruebas).
 - [ ] Elegir sitio(s), IDs de aplicaciones y grupos de administradores/analistas.
 - [ ] Manifest de recursos con tipos de columnas, índices y grants; migraciones versionadas.
 - [ ] `Install-ScannerPortal.ps1`: preflight, plan/WhatIf, apply idempotente, verificación y rollback.
