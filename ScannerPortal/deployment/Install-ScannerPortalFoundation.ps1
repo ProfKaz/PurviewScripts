@@ -77,20 +77,25 @@ if (-not @($siteAdmins | Where-Object { Test-PilotOwner $_ }).Count -or
 Assert-OwnerOnlyRoleAssignments $web
 if (-not $PSCmdlet.ShouldProcess($siteAddress, 'Provision empty pilot libraries, indexed lists and a native landing page')) { return }
 
+$siteLists = @(Get-PnPList -Includes BaseTemplate,HasUniqueRoleAssignments,Hidden,NoCrawl,EnableVersioning -Connection $SiteConnection)
+function Get-PilotList([string]$Title) {
+    Get-PnPList -Includes BaseTemplate,HasUniqueRoleAssignments,Hidden,NoCrawl,EnableVersioning -Connection $SiteConnection |
+        Where-Object { $_ -is [Microsoft.SharePoint.Client.List] -and $_.Title -eq $Title } | Select-Object -First 1
+}
 foreach ($spec in $manifest.libraries) {
-    $library = Get-PnPList -Identity $spec.name -Includes BaseTemplate,HasUniqueRoleAssignments,Hidden,NoCrawl,EnableVersioning -Connection $SiteConnection
+    $library = $siteLists | Where-Object Title -EQ $spec.name | Select-Object -First 1
     if ($null -eq $library) {
-        $library = New-PnPList -Title $spec.name -Template DocumentLibrary -Url $spec.name -Hidden -Connection $SiteConnection
-        $null = Get-PnPProperty -ClientObject $library -Property HasUniqueRoleAssignments -Connection $SiteConnection
+        New-PnPList -Title $spec.name -Template DocumentLibrary -Url $spec.name -Hidden -Connection $SiteConnection | Out-Null
+        $library = Get-PilotList $spec.name
     }
     if ([int]$library.BaseTemplate -ne 101) { throw "Unexpected resource type: $($spec.name)." }
     if (-not $library.HasUniqueRoleAssignments) {
-        Set-PnPList -Identity $library.Id -BreakRoleInheritance -CopyRoleAssignments:$false -Connection $SiteConnection
+        Set-PnPList -Identity $library.Id -BreakRoleInheritance -CopyRoleAssignments:$false -Connection $SiteConnection | Out-Null
     }
     $settings = @{ Identity = $library.Id; Hidden = $true; NoCrawl = $true; Connection = $SiteConnection }
     if ($spec.name -eq 'ScannerPortalConfig') { $settings.EnableVersioning = $true }
-    Set-PnPList @settings
-    $library = Get-PnPList -Identity $library.Id -Includes HasUniqueRoleAssignments,Hidden,NoCrawl,EnableVersioning -Connection $SiteConnection
+    Set-PnPList @settings | Out-Null
+    $library = Get-PilotList $spec.name
     if (-not ($library.HasUniqueRoleAssignments -and $library.Hidden -and $library.NoCrawl) -or
         ($spec.name -eq 'ScannerPortalConfig' -and -not $library.EnableVersioning)) {
         throw "Restricted settings could not be verified for $($spec.name)."
@@ -99,8 +104,11 @@ foreach ($spec in $manifest.libraries) {
 }
 
 foreach ($spec in $manifest.lists) {
-    $list = Get-PnPList -Identity $spec.name -Includes BaseTemplate,HasUniqueRoleAssignments -Connection $SiteConnection
-    if ($null -eq $list) { $list = New-PnPList -Title $spec.name -Template GenericList -Connection $SiteConnection }
+    $list = $siteLists | Where-Object Title -EQ $spec.name | Select-Object -First 1
+    if ($null -eq $list) {
+        New-PnPList -Title $spec.name -Template GenericList -Connection $SiteConnection | Out-Null
+        $list = Get-PilotList $spec.name
+    }
     if ([int]$list.BaseTemplate -ne 100) { throw "Unexpected resource type: $($spec.name)." }
     Assert-OwnerOnlyRoleAssignments $list
     $fields = @(Get-PnPField -List $list.Id -Includes InternalName,TypeAsString,Indexed -Connection $SiteConnection)
@@ -114,14 +122,16 @@ foreach ($spec in $manifest.lists) {
         if ($field.TypeAsString -ne $type) { throw "Field type mismatch for $($spec.name).$name." }
         if (-not $field.Indexed) {
             Set-PnPField -List $list.Id -Identity $field.Id -Values @{Indexed = $true} -Connection $SiteConnection | Out-Null
-            $field = Get-PnPField -List $list.Id -Identity $field.Id -Includes Indexed -Connection $SiteConnection
+            $field = Get-PnPField -List $list.Id -Identity $field.Id -Includes Indexed -Connection $SiteConnection | Select-Object -First 1
             if (-not $field.Indexed) { throw "Index could not be verified for $($spec.name).$name." }
         }
     }
 }
 
 $pageLibraryPath = "$($SiteUrl.AbsolutePath)/SitePages"
-$pageLibrary = Get-PnPList -Identity $pageLibraryPath -ThrowExceptionIfListNotFound -Connection $SiteConnection
+$pageLibrary = Get-PnPList -Includes RootFolder -Connection $SiteConnection |
+    Where-Object { $_.BaseTemplate -eq 119 -and $_.RootFolder.ServerRelativeUrl -eq $pageLibraryPath } | Select-Object -First 1
+if ($null -eq $pageLibrary) { throw 'The modern Site Pages library was not found.' }
 Assert-OwnerOnlyRoleAssignments $pageLibrary
 $query = "<View><Query><Where><Eq><FieldRef Name='FileLeafRef'/><Value Type='File'>$pageName</Value></Eq></Where></Query></View>"
 $existingPage = Get-PnPListItem -List $pageLibrary.Id -Query $query -Connection $SiteConnection | Select-Object -First 1
@@ -136,8 +146,8 @@ if ($null -eq $existingPage -or [string]$existingPage['CanvasContent1'] -notmatc
 }
 Set-PnPPage -Identity $pageName -Publish -Connection $SiteConnection | Out-Null
 Set-PnPHomePage -RootFolderRelativeUrl "SitePages/$pageName" -Connection $SiteConnection
-$home = Get-PnPHomePage -Connection $SiteConnection
-if (-not ([string]$home).EndsWith("SitePages/$pageName", [StringComparison]::OrdinalIgnoreCase)) {
+$pilotWelcomePage = Get-PnPHomePage -Connection $SiteConnection
+if (-not ([string]$pilotWelcomePage).EndsWith("SitePages/$pageName", [StringComparison]::OrdinalIgnoreCase)) {
     throw 'The pilot home page could not be verified.'
 }
 [pscustomobject]@{ Status = 'FoundationDeployed'; SiteUrl = $siteAddress; Page = $plan.Page; Libraries = $plan.Libraries; Lists = $plan.Lists; DeploysSPFx = $false }

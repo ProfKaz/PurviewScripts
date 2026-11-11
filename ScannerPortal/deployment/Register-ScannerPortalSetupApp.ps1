@@ -44,10 +44,6 @@ $registration = @{
     O365ManagementDelegatePermissions = @()
     ErrorAction = 'Stop'
 }
-# Resolve without depending on the process working directory.
-$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$logo = Join-Path $repoRoot 'labs/MipSdkAudit/kaz-demos-entra-215.png'
-if (Test-Path -LiteralPath $logo) { $registration.LogoFilePath = $logo }
 if ($DeviceLogin) { $registration.DeviceLogin = $true }
 # PnP handles authentication and consent. Its output contains the public app ID, never a generated secret.
 Register-PnPEntraIDAppForInteractiveLogin @registration

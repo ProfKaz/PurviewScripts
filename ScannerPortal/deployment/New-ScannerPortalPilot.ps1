@@ -19,6 +19,7 @@ param(
     [string]$Tenant,
     [ValidateSet('Interactive', 'DeviceLogin')][string]$LoginMethod = 'Interactive',
     [switch]$DeployFoundation,
+    [switch]$ResumeFoundation,
     [ValidateSet(1033, 3082)][int]$Lcid = 3082
 )
 Set-StrictMode -Version Latest
@@ -37,6 +38,7 @@ if ($SiteUrl.Scheme -ne 'https' -or $SiteUrl.Host -ne $expectedHost -or
 }
 if ($Owner -notmatch '^[^\s@]+@[^\s@]+\.[^\s@]+$') { throw 'Owner must be a user UPN.' }
 $siteAddress = $SiteUrl.AbsoluteUri.TrimEnd('/')
+if ($ResumeFoundation -and -not $DeployFoundation) { throw 'ResumeFoundation requires DeployFoundation.' }
 $plan = [pscustomobject]@{
     Stage = if ($DeployFoundation) { 'SiteAndFoundation' } else { 'SiteOnly' }
     AdminUrl = $AdminUrl.AbsoluteUri.TrimEnd('/')
@@ -46,7 +48,7 @@ $plan = [pscustomobject]@{
     Lcid = $Lcid
     Type = 'CommunicationSite'
     ExternalSharing = 'Disabled'
-    ExistingSitePolicy = 'Read status only; never adopt or change automatically'
+    ExistingSitePolicy = if ($ResumeFoundation) { 'Resume only on the expected site after validating owner and access' } else { 'Read status only; never adopt or change automatically' }
     DeploysSPFx = $false
     DeploysProfiles = $false
 }
@@ -70,7 +72,7 @@ try {
     # A failed tenant query is fatal; never interpret a permission/network error as site absence.
     $existing = @(Get-PnPTenantSite -Filter "Url -eq '$siteAddress'" -Connection $adminConnection |
         Where-Object { $_.Url.TrimEnd('/') -eq $siteAddress })
-    if ($existing.Count -gt 0) {
+    if ($existing.Count -gt 0 -and -not $ResumeFoundation) {
         [pscustomobject]@{
             Status = 'AlreadyExistsNeedsReview'
             SiteUrl = $siteAddress
@@ -79,16 +81,22 @@ try {
         }
         return
     }
-    New-PnPSite -Type CommunicationSite -Title $Title -Url $siteAddress -Owner $Owner -Lcid $Lcid `
-        -Wait -Connection $adminConnection | Out-Null
-    Write-Host "Site created: $siteAddress. Verifying sharing and permissions."
-    # No content is uploaded. If this fails, stop and report the created site for recovery.
-    Set-PnPTenantSite -Identity $siteAddress -SharingCapability Disabled -Connection $adminConnection
+    if ($ResumeFoundation) {
+        if ($existing.Count -ne 1 -or $existing[0].Title -ne $Title) { throw 'The expected pilot site was not found.' }
+    } else {
+        New-PnPSite -Type CommunicationSite -Title $Title -Url $siteAddress -Owner $Owner -Lcid $Lcid `
+            -Wait -Connection $adminConnection | Out-Null
+        Write-Host "Site created: $siteAddress. Verifying sharing and permissions."
+        Set-PnPTenantSite -Identity $siteAddress -SharingCapability Disabled -Connection $adminConnection
+    }
     $created = Get-PnPTenantSite -Identity $siteAddress -Detailed -Connection $adminConnection
     if ([string]$created.SharingCapability -ne 'Disabled') {
         throw "Site created at $siteAddress, but disabling external sharing could not be verified. Do not upload data."
     }
-    $siteConnection = Connect-PnPOnline -Url $siteAddress -Connection $adminConnection @login
+    # Same SharePoint tenant and API audience; keep the token in this process only.
+    $sharePointToken = Get-PnPAccessToken -ResourceTypeName SharePoint -Connection $adminConnection
+    try { $siteConnection = Connect-PnPOnline -Url $siteAddress -AccessToken $sharePointToken -ReturnConnection }
+    finally { $sharePointToken = $null }
     $web = Get-PnPWeb -Includes RoleAssignments,AssociatedOwnerGroup,AssociatedMemberGroup,AssociatedVisitorGroup `
         -Connection $siteConnection
     $groups = foreach ($group in @($web.AssociatedOwnerGroup, $web.AssociatedMemberGroup, $web.AssociatedVisitorGroup)) {

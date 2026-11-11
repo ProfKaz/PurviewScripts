@@ -14,7 +14,7 @@ Si no existe aplicación interactiva, preparar un registro dedicado con permisos
 
 ## Registrar la aplicación dedicada (una vez por tenant)
 
-`deployment/Register-ScannerPortalSetupApp.ps1` prepara el registro **Kaz Demos Scanner Portal - Setup**, single-tenant, con permisos delegados explícitos `User.Read` (Graph) y `AllSites.FullControl` (SharePoint). No solicita permisos de aplicación ni crea secretos. Incorpora el logo del repositorio si está disponible.
+`deployment/Register-ScannerPortalSetupApp.ps1` prepara el registro **Kaz Demos Scanner Portal - Setup**, single-tenant, con permisos delegados explícitos `User.Read` (Graph) y `AllSites.FullControl` (SharePoint). No solicita permisos de aplicación ni crea secretos. El logo se reserva para el portal.
 
 ```powershell
 # Revisar el plan sin iniciar sesión:
@@ -66,7 +66,7 @@ Si falla después de crear, conservar la URL y revisar el estado; no elimina el 
 
 La base crea dos bibliotecas vacías ocultas, sin indexación de búsqueda y con permisos únicos, seis listas vacías con columnas indexadas y una página moderna nativa con «Powered by Kaz Demos». Todavía no hay telemetría, administración de perfiles desde la interfaz ni paquete SPFx. No se conceden permisos a agentes. La lista de recursos se lee de `deployment/solution-manifest.json`; las columnas iniciales solo cubren los índices y no equivalen a los contratos completos de ingesta.
 
-Para reintentar solo la base después de un fallo parcial, usar `Install-ScannerPortalFoundation.ps1 -Mode Apply -SiteUrl <url> -Owner <upn> -AdminConnection $admin -SiteConnection $site` con conexiones PnP explícitas y aprobadas al sitio piloto. Si no se pasan conexiones, el modo predeterminado devuelve el plan. No se eliminan recursos; conservar el sitio para revisar errores.
+Para reintentar solo la base después de un fallo parcial, repetir el comando de creación con `-DeployFoundation -ResumeFoundation`. Este modo exige que exista exactamente el sitio con el título esperado y vuelve a comprobar acceso antes de aprovisionar. No crea, adopta ni cambia el uso compartido del sitio en este modo. También se puede invocar `Install-ScannerPortalFoundation.ps1 -Mode Apply -SiteUrl <url> -Owner <upn> -AdminConnection $admin -SiteConnection $site` con conexiones PnP explícitas. No se eliminan recursos.
 
 ## Evidencia de pruebas
 
