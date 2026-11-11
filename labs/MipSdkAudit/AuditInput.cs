@@ -9,6 +9,9 @@ sealed record RuleMapping(string RuleId, Guid SitId, int Confidence);
 sealed record AuditSettings(Guid TenantId, Guid ClientId, string[] Roots, RuleMapping[] Rules,
     string? ExpectedUser = null, int MaxFiles = 50)
 {
+    public bool ContainsPath(string path) => Roots.Any(root => path.StartsWith(
+        root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+
     public static AuditSettings Read(string path)
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
@@ -82,9 +85,7 @@ sealed record AuditCandidate(string Path, string Sha256, Dictionary<Guid, SitEvi
             }
             if (evidence.Count == 0) continue;
             var file = NormalizePath(row.GetProperty("path").GetString());
-            if (!settings.Roots.Any(root => file.StartsWith(
-                root.TrimEnd(System.IO.Path.DirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar,
-                StringComparison.OrdinalIgnoreCase)) ||
+            if (!settings.ContainsPath(file) ||
                 System.IO.Path.GetExtension(file).ToLowerInvariant() is not (".txt" or ".csv"))
                 continue;
             if (!row.TryGetProperty("sha256", out var hash) || hash.GetString() is not { Length: 64 } digest ||
@@ -102,11 +103,11 @@ sealed record AuditCandidate(string Path, string Sha256, Dictionary<Guid, SitEvi
 
     public FileStream OpenVerified()
     {
-        AssertLocalFile();
+        AssertLocalPath(Path);
         var stream = File.Open(Path, FileMode.Open, FileAccess.Read, FileShare.Read);
         try
         {
-            AssertLocalFile();
+            AssertLocalPath(Path);
             if (stream.Length > MaxFileBytes || !string.Equals(Convert.ToHexString(SHA256.HashData(stream)),
                 Sha256, StringComparison.OrdinalIgnoreCase))
                 throw new AuditInputException("file_changed_since_audit");
@@ -120,12 +121,12 @@ sealed record AuditCandidate(string Path, string Sha256, Dictionary<Guid, SitEvi
         }
     }
 
-    private void AssertLocalFile()
+    public static void AssertLocalPath(string path)
     {
-        var root = System.IO.Path.GetPathRoot(Path)!;
+        var root = System.IO.Path.GetPathRoot(path)!;
         if (new DriveInfo(root).DriveType is not (DriveType.Fixed or DriveType.Removable or DriveType.Ram))
             throw new AuditInputException("file_not_on_local_drive");
-        for (string? current = Path; current is not null; current = System.IO.Path.GetDirectoryName(current))
+        for (string? current = path; current is not null; current = System.IO.Path.GetDirectoryName(current))
             if ((File.GetAttributes(current) & (FileAttributes.ReparsePoint | FileAttributes.Offline)) != 0)
                 throw new AuditInputException("file_or_ancestor_unavailable");
     }
