@@ -70,7 +70,11 @@ Para reintentar solo la base después de un fallo parcial, repetir el comando de
 
 ## Evidencia de pruebas
 
-Ejecutar `tests/Test-PilotPlan.ps1` sin conexión comprueba plan, WhatIf y rechazo de URLs/propietarios inválidos. Estas pruebas no validan autenticación, creación, permisos efectivos ni idempotencia online. Registrar esos resultados después de ejecutar contra el tenant piloto. Guardar evidencia del tenant fuera del repositorio público.
+`tests/Test-PilotPlan.ps1` comprueba el plan, WhatIf y el rechazo de URLs/propietarios inválidos sin conexión.
+
+Prueba en tenant de laboratorio, 10 de noviembre de 2026: registro de Entra y consentimiento interactivo completados; sitio de comunicación creado; uso compartido externo deshabilitado; verificación de acceso configurado para el propietario antes del aprovisionamiento. El instalador reanudó y completó dos bibliotecas con permisos únicos, seis listas con índices y una portada publicada como página de inicio. Una nueva ejecución devolvió `FoundationDeployed`; se comprobó una sola aparición de la marca Kaz Demos en la portada y versión publicada `1.0`.
+
+No se probó acceso con una segunda identidad, ni se cargaron perfiles/eventos. Los detalles identificativos del tenant y la autenticación no se publican en GitHub.
 
 Siguiente fase: revisar membresías/asignaciones, aprovisionar bibliotecas restringidas y listas indexadas, probar acceso denegado con otra identidad y después desplegar el paquete SPFx cuando esté implementado.
 

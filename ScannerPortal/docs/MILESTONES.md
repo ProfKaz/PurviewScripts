@@ -27,6 +27,7 @@ Cada milestone se cierra por evidencia de aceptación, no por porcentaje de arch
 ### SP2
 
 - [x] Scripts iniciales de plan/registro de aplicación interactiva y creación aislada de sitio, con pruebas offline. No equivalen al instalador integral ni a validación del tenant.
+- [x] Validar el registro de la aplicación, la creación de un sitio piloto y la base nativa vacía en un tenant de laboratorio. Ver [evidencia del piloto](PILOT-SETUP.md#evidencia-de-pruebas).
 - [ ] Elegir sitio(s), IDs de aplicaciones y grupos de administradores/analistas.
 - [ ] Manifest de recursos con tipos de columnas, índices y grants; migraciones versionadas.
 - [ ] `Install-ScannerPortal.ps1`: preflight, plan/WhatIf, apply idempotente, verificación y rollback.
