@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "0.1",
+  "profileId": "workstations-audit-pilot",
+  "version": "1.0.0",
+  "execution": {
+    "roots": ["C:\\ScannerPilot"],
+    "auditContent": true,
+    "maxSeconds": 300,
+    "continuous": false
+  },
+  "files": {
+    "extensions.json": [".txt", ".csv"],
+    "exclusions.json": ["%SystemRoot%", "%SystemDrive%\\Program Files", "%SystemDrive%\\ProgramData"],
+    "performance.json": {"batchSize": 250, "pauseMilliseconds": 25},
+    "incremental.json": {
+      "enabled": true,
+      "rescanIntervalDays": 30,
+      "detectModifiedFiles": true,
+      "detectDeletedFiles": true,
+      "forceFullScan": false,
+      "maxFileSizeMB": 100,
+      "stateDirectory": "%LOCALAPPDATA%\\LocalMIPScanner\\State"
+    },
+    "classifiers.json": {
+      "maxBytes": 1048576,
+      "rules": [{"id": "synthetic-pilot-id", "pattern": "\\bPILOT-[0-9]{6}\\b"}]
+    }
+  },
+  "activityScope": {
+    "serviceAccounts": ["scanner-pilot@example.invalid"],
+    "activities": ["FileDiscovered", "LabelApplied", "LabelChanged", "LabelRemoved"],
+    "workloads": [],
+    "userField": "User"
+  }
+}
