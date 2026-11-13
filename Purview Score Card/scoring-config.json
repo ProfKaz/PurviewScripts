@@ -1,0 +1,484 @@
+{
+  "$schema": "./scoring-config.schema.json",
+  "schemaVersion": "1.0.0",
+  "model": {
+    "name": "Microsoft Purview Score Card",
+    "version": "1.0.1",
+    "effectiveDate": "2026-08-27",
+    "scoreScale": {
+      "minimum": 0,
+      "maximum": 100,
+      "metricMaturityMinimum": 0,
+      "metricMaturityMaximum": 4
+    },
+    "missingEvidencePolicy": "exclude-from-posture-and-reduce-confidence",
+    "bands": [
+      { "minimum": 0, "maximum": 29.99, "name": "Ad hoc", "risk": "High" },
+      { "minimum": 30, "maximum": 49.99, "name": "Basic", "risk": "Material" },
+      { "minimum": 50, "maximum": 69.99, "name": "Defined", "risk": "Moderate" },
+      { "minimum": 70, "maximum": 84.99, "name": "Managed", "risk": "Controlled" },
+      { "minimum": 85, "maximum": 100, "name": "Optimized", "risk": "Residual" }
+    ],
+    "evidenceStates": [
+      "Observed",
+      "Imported",
+      "ManualApproved",
+      "NotObserved",
+      "Unavailable",
+      "NotCollected"
+    ],
+    "scorableEvidenceStates": [
+      "Observed",
+      "Imported",
+      "ManualApproved",
+      "NotObserved"
+    ]
+  },
+  "standards": [
+    {
+      "id": "ISO27001",
+      "name": "ISO/IEC 27001:2022",
+      "url": "https://www.iso.org/standard/27001"
+    },
+    {
+      "id": "ISO27002",
+      "name": "ISO/IEC 27002:2022",
+      "url": "https://www.iso.org/standard/75652.html"
+    },
+    {
+      "id": "ISO42001",
+      "name": "ISO/IEC 42001:2023",
+      "url": "https://www.iso.org/standard/42001"
+    },
+    {
+      "id": "NISTCSF20",
+      "name": "NIST Cybersecurity Framework 2.0",
+      "url": "https://www.nist.gov/publications/nist-cybersecurity-framework-csf-20"
+    },
+    {
+      "id": "NISTPRIVACY",
+      "name": "NIST Privacy Framework",
+      "url": "https://www.nist.gov/privacy-framework"
+    },
+    {
+      "id": "GDPR",
+      "name": "General Data Protection Regulation",
+      "url": "https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=CELEX%3A32016R0679"
+    }
+  ],
+  "ratioThresholdSets": {
+    "coverageStandard": [
+      { "score": 0, "minimumInclusive": 0.0, "maximumExclusive": 0.01 },
+      { "score": 1, "minimumInclusive": 0.01, "maximumExclusive": 0.4 },
+      { "score": 2, "minimumInclusive": 0.4, "maximumExclusive": 0.7 },
+      { "score": 3, "minimumInclusive": 0.7, "maximumExclusive": 0.9 },
+      { "score": 4, "minimumInclusive": 0.9, "maximumInclusive": 1.0 }
+    ],
+    "adoptionInitial": [
+      { "score": 0, "minimumInclusive": 0.0, "maximumExclusive": 0.01 },
+      { "score": 1, "minimumInclusive": 0.01, "maximumExclusive": 0.1 },
+      { "score": 2, "minimumInclusive": 0.1, "maximumExclusive": 0.4 },
+      { "score": 3, "minimumInclusive": 0.4, "maximumExclusive": 0.7 },
+      { "score": 4, "minimumInclusive": 0.7, "maximumInclusive": 1.0 }
+    ]
+  },
+  "dimensions": [
+    {
+      "id": "GOV",
+      "name": "Governance and inventory",
+      "weight": 15,
+      "metrics": [
+        {
+          "id": "GOV-01",
+          "name": "Purview capability and evidence inventory",
+          "weight": 4,
+          "minimumProfile": "Basic",
+          "measurement": "maturity",
+          "evidence": ["Run-Manifest", "collection statuses"],
+          "standards": ["ISO27001", "NISTCSF20", "NISTPRIVACY"]
+        },
+        {
+          "id": "GOV-02",
+          "name": "Classification taxonomy ownership and purpose",
+          "weight": 3,
+          "minimumProfile": "Basic",
+          "measurement": "hybrid",
+          "evidence": ["SensitivityLabels", "manual DPO validation"],
+          "standards": ["ISO27001", "ISO27002", "GDPR"]
+        },
+        {
+          "id": "GOV-03",
+          "name": "Policy lifecycle hygiene",
+          "weight": 3,
+          "minimumProfile": "Basic",
+          "measurement": "hybrid",
+          "evidence": ["DLPPolicies", "DLPRules", "LabelPolicies", "policy age and duplicates"],
+          "standards": ["ISO27001", "NISTCSF20"]
+        },
+        {
+          "id": "GOV-04",
+          "name": "Retention and legal obligation governance",
+          "weight": 3,
+          "minimumProfile": "Intermediate",
+          "measurement": "hybrid",
+          "evidence": ["RetentionLabels", "RetentionPolicies", "RetentionRules", "manual legal validation"],
+          "standards": ["ISO27001", "ISO27002", "GDPR"]
+        },
+        {
+          "id": "GOV-05",
+          "name": "AI and Copilot data governance",
+          "weight": 2,
+          "minimumProfile": "Full",
+          "measurement": "manual",
+          "evidence": ["approved AI data scope", "risk assessment", "control ownership"],
+          "standards": ["ISO42001", "NISTCSF20", "NISTPRIVACY"]
+        }
+      ]
+    },
+    {
+      "id": "COV",
+      "name": "Coverage and licensing",
+      "weight": 25,
+      "metrics": [
+        {
+          "id": "COV-01",
+          "name": "General licensed-user coverage",
+          "weight": 8,
+          "minimumProfile": "Basic",
+          "measurement": "ratio",
+          "formula": "activeMemberUsersWithAnyLicense / activeMemberUsers",
+          "thresholdSet": "coverageStandard",
+          "evidence": ["DirectoryCoverage"],
+          "standards": ["ISO27001", "NISTCSF20"]
+        },
+        {
+          "id": "COV-02",
+          "name": "Eligible Purview license coverage",
+          "weight": 7,
+          "minimumProfile": "Basic",
+          "measurement": "ratio",
+          "formula": "activeTargetUsersWithEligibleSkuOrPlan / activeTargetUsers",
+          "thresholdSet": "coverageStandard",
+          "requiresConfiguration": "collection.eligibleLicensing",
+          "evidence": ["SubscribedSkus", "DirectoryCoverage"],
+          "standards": ["ISO27001", "ISO42001", "NISTCSF20"]
+        },
+        {
+          "id": "COV-03",
+          "name": "Sensitivity-label publication coverage",
+          "weight": 5,
+          "minimumProfile": "Basic",
+          "measurement": "ratio",
+          "formula": "activeTargetUsersCoveredByLabelPolicies / activeTargetUsers",
+          "thresholdSet": "coverageStandard",
+          "evidence": ["LabelPolicies", "DirectoryCoverage"],
+          "standards": ["ISO27002", "NISTPRIVACY", "GDPR"]
+        },
+        {
+          "id": "COV-04",
+          "name": "DLP workload coverage",
+          "weight": 5,
+          "minimumProfile": "Basic",
+          "measurement": "ratio",
+          "formula": "targetWorkloadsWithEnabledDlpPolicy / configuredTargetWorkloads",
+          "thresholdSet": "coverageStandard",
+          "evidence": ["DLPPolicies", "DLPRules"],
+          "standards": ["ISO27002", "NISTCSF20", "GDPR"]
+        }
+      ]
+    },
+    {
+      "id": "PRO",
+      "name": "Configured protection",
+      "weight": 20,
+      "metrics": [
+        {
+          "id": "PRO-01",
+          "name": "DLP enforcement maturity",
+          "weight": 7,
+          "minimumProfile": "Basic",
+          "measurement": "maturity",
+          "evidence": ["DLPPolicies", "DLPRules"],
+          "standards": ["ISO27002", "NISTCSF20", "GDPR"]
+        },
+        {
+          "id": "PRO-02",
+          "name": "Sensitivity-label protection and rights",
+          "weight": 5,
+          "minimumProfile": "Basic",
+          "measurement": "maturity",
+          "evidence": ["SensitivityLabels", "LabelPolicies"],
+          "standards": ["ISO27002", "NISTPRIVACY", "GDPR"]
+        },
+        {
+          "id": "PRO-03",
+          "name": "IRM and RMS configuration",
+          "weight": 3,
+          "minimumProfile": "Intermediate",
+          "measurement": "maturity",
+          "evidence": ["IRMConfiguration", "RMSTrustedPublishingDomains", "RMSTemplates", "IRMTransportRules"],
+          "standards": ["ISO27002", "NISTCSF20"]
+        },
+        {
+          "id": "PRO-04",
+          "name": "Retention lifecycle coverage",
+          "weight": 3,
+          "minimumProfile": "Intermediate",
+          "measurement": "maturity",
+          "evidence": ["RetentionLabels", "RetentionPolicies", "RetentionRules"],
+          "standards": ["ISO27002", "NISTPRIVACY", "GDPR"]
+        },
+        {
+          "id": "PRO-05",
+          "name": "Segregation and conduct controls",
+          "weight": 2,
+          "minimumProfile": "Full",
+          "measurement": "maturity",
+          "evidence": ["InformationBarrierSegments", "InformationBarrierPolicies", "CommunicationCompliancePolicies"],
+          "standards": ["ISO27002", "NISTCSF20"]
+        }
+      ]
+    },
+    {
+      "id": "ADO",
+      "name": "Adoption and operational effectiveness",
+      "weight": 25,
+      "metrics": [
+        {
+          "id": "ADO-01",
+          "name": "Email labeling rate",
+          "weight": 6,
+          "minimumProfile": "Intermediate",
+          "measurement": "ratio",
+          "formula": "comparableLabeledEmailEvents / comparableEmailVolume",
+          "thresholdSet": "adoptionInitial",
+          "evidence": ["EmailActivityCounts", "ActivityExplorerAggregate", "AdvancedHuntingAggregate"],
+          "standards": ["ISO27001", "ISO27002", "NISTPRIVACY", "GDPR"]
+        },
+        {
+          "id": "ADO-02",
+          "name": "File labeling coverage",
+          "weight": 6,
+          "minimumProfile": "Full",
+          "measurement": "ratio",
+          "formula": "labeledFiles / comparableActiveOrTotalFiles",
+          "thresholdSet": "adoptionInitial",
+          "evidence": ["OneDriveFileCounts", "SharePointFileCounts", "ContentExplorerAggregate"],
+          "standards": ["ISO27002", "NISTPRIVACY", "GDPR"]
+        },
+        {
+          "id": "ADO-03",
+          "name": "Labeling user adoption",
+          "weight": 4,
+          "minimumProfile": "Intermediate",
+          "measurement": "ratio",
+          "formula": "distinctLabelingUsers / activeEligibleUsers",
+          "thresholdSet": "adoptionInitial",
+          "evidence": ["ActivityExplorerAggregate", "DirectoryCoverage"],
+          "standards": ["ISO27001", "NISTCSF20"]
+        },
+        {
+          "id": "ADO-04",
+          "name": "DLP telemetry coverage",
+          "weight": 4,
+          "minimumProfile": "Intermediate",
+          "measurement": "ratio",
+          "formula": "targetWorkloadsWithMeasurableDlpSignals / configuredTargetWorkloads",
+          "thresholdSet": "coverageStandard",
+          "evidence": ["ActivityExplorerAggregate", "AdvancedHuntingAggregate"],
+          "standards": ["ISO27002", "NISTCSF20"]
+        },
+        {
+          "id": "ADO-05",
+          "name": "Override and exception quality",
+          "weight": 3,
+          "minimumProfile": "Intermediate",
+          "measurement": "ratio",
+          "formula": "reviewedJustifiedOverrides / totalOverrides",
+          "thresholdSet": "coverageStandard",
+          "evidence": ["ActivityExplorerAggregate", "manual exception review"],
+          "standards": ["ISO27001", "ISO27002", "GDPR"]
+        },
+        {
+          "id": "ADO-06",
+          "name": "Operational measurement availability",
+          "weight": 2,
+          "minimumProfile": "Basic",
+          "measurement": "ratio",
+          "formula": "observedOperationalIndicators / expectedOperationalIndicatorsForProfile",
+          "thresholdSet": "coverageStandard",
+          "evidence": ["Run-Manifest"],
+          "standards": ["ISO27001", "ISO42001", "NISTCSF20"]
+        }
+      ]
+    },
+    {
+      "id": "MON",
+      "name": "Monitoring, response, and improvement",
+      "weight": 15,
+      "metrics": [
+        {
+          "id": "MON-01",
+          "name": "Alert and incident coverage",
+          "weight": 4,
+          "minimumProfile": "Intermediate",
+          "measurement": "hybrid",
+          "evidence": ["DLP alert settings", "Communication Compliance", "manual incident workflow"],
+          "standards": ["ISO27001", "ISO27002", "NISTCSF20", "GDPR"]
+        },
+        {
+          "id": "MON-02",
+          "name": "Activity telemetry availability",
+          "weight": 3,
+          "minimumProfile": "Intermediate",
+          "measurement": "maturity",
+          "evidence": ["ActivityExplorerAggregate", "audit evidence"],
+          "standards": ["ISO27002", "NISTCSF20"]
+        },
+        {
+          "id": "MON-03",
+          "name": "Cross-validation and aggregate hunting",
+          "weight": 3,
+          "minimumProfile": "Full",
+          "measurement": "maturity",
+          "evidence": ["AdvancedHuntingAggregate", "ContentExplorerAggregate", "Data Explorer export"],
+          "standards": ["ISO27001", "ISO42001", "NISTCSF20"]
+        },
+        {
+          "id": "MON-04",
+          "name": "Triage and response SLA attainment",
+          "weight": 3,
+          "minimumProfile": "Full",
+          "measurement": "ratio",
+          "formula": "casesClosedWithinSla / closedCases",
+          "thresholdSet": "coverageStandard",
+          "evidence": ["incident report", "manual approved input"],
+          "standards": ["ISO27001", "NISTCSF20", "GDPR"]
+        },
+        {
+          "id": "MON-05",
+          "name": "Review and continual-improvement cadence",
+          "weight": 2,
+          "minimumProfile": "Basic",
+          "measurement": "manual",
+          "evidence": ["review minutes", "improvement backlog", "risk acceptance"],
+          "standards": ["ISO27001", "ISO42001", "NISTCSF20"]
+        }
+      ]
+    }
+  ],
+  "collectionProfiles": {
+    "Basic": {
+      "description": "Configuration, licensing, directory coverage, and aggregate Microsoft 365 usage.",
+      "sources": [
+        "DLPPolicies",
+        "DLPRules",
+        "SensitivityLabels",
+        "LabelPolicies",
+        "Organization",
+        "SubscribedSkus",
+        "DirectoryCoverage",
+        "EmailActivityCounts",
+        "OneDriveFileCounts",
+        "SharePointFileCounts"
+      ]
+    },
+    "Intermediate": {
+      "inherits": "Basic",
+      "description": "Adds rights management, retention, classification inventory, and aggregate activity.",
+      "sources": [
+        "IRMConfiguration",
+        "RMSTrustedPublishingDomains",
+        "RMSTemplates",
+        "IRMTransportRules",
+        "RetentionLabels",
+        "RetentionPolicies",
+        "RetentionRules",
+        "SensitiveInformationTypes",
+        "ActivityExplorerAggregate"
+      ]
+    },
+    "Full": {
+      "inherits": "Intermediate",
+      "description": "Adds segregation, conduct, hunting, and cross-validation sources.",
+      "sources": [
+        "InformationBarrierSegments",
+        "InformationBarrierPolicies",
+        "CommunicationCompliancePolicies",
+        "AdvancedHuntingAggregate",
+        "ContentExplorerAggregate"
+      ]
+    }
+  },
+  "collection": {
+    "allowedLookbackDays": [30, 60, 90],
+    "graphReportPeriodMap": {
+      "30": "D30",
+      "60": "D90",
+      "90": "D90"
+    },
+    "targetWorkloads": ["Exchange", "SharePoint", "OneDrive", "Teams", "Endpoints"],
+    "eligibleLicensing": {
+      "targetPopulation": "activeMemberUsers",
+      "skuPartNumbers": [],
+      "servicePlanNames": [],
+      "emptyConfigurationBehavior": "Unavailable"
+    },
+    "activityExplorer": {
+      "enabled": true,
+      "maximumLookbackDays": 30,
+      "pageSize": 5000,
+      "maximumPages": 100,
+      "persistDetailedRecords": false
+    },
+    "advancedHunting": {
+      "enabled": true,
+      "requireSummarizeOperator": true,
+      "queries": [
+        {
+          "name": "Cloud application activity by action type",
+          "enabled": true,
+          "query": "CloudAppEvents | summarize EventCount=count() by ActionType | order by EventCount desc"
+        }
+      ]
+    },
+    "contentExplorer": {
+      "enabled": true,
+      "pageSize": 1,
+      "workloads": ["EXO", "ODB", "SPO", "Teams"],
+      "tags": []
+    }
+  },
+  "manualOverrideRequirements": {
+    "requiredFields": ["score", "reason", "evidence", "approvedBy", "approvedOn", "expiresOn"],
+    "scoreMinimum": 0,
+    "scoreMaximum": 4,
+    "expiredOverrideBehavior": "ignore"
+  },
+  "manualOverrides": {
+    "GOV-02": null,
+    "GOV-04": null,
+    "GOV-05": null,
+    "MON-01": null,
+    "MON-04": null,
+    "MON-05": null
+  },
+  "changeLog": [
+    {
+      "version": "1.0.0",
+      "date": "2026-08-27",
+      "change": "Initial standards-aligned model."
+    },
+    {
+      "version": "1.0.1",
+      "date": "2026-08-27",
+      "change": "Added configurable licensing coverage, aggregate Advanced Hunting, and sensitivity-tag Content Explorer collection for the Full profile."
+    },
+    {
+      "version": "1.0.2",
+      "date": "2026-11-13",
+      "change": "Published the reusable project baseline with tenant-specific SKU and sensitivity-label values removed from the default configuration."
+    }
+  ]
+}
+
