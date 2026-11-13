@@ -1,0 +1,20 @@
+# Tenant evidence and generated reports
+Collected Data/
+Exported Data/
+
+# Collector diagnostics and transient output
+*.log
+*.tmp
+*.bak
+*.zip
+*.xml
+
+# PowerShell and editor state
+*.clixml
+.vscode/
+.idea/
+
+# Operating-system metadata
+Thumbs.db
+.DS_Store
+
