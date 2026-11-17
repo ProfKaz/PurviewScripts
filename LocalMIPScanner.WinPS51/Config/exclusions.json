@@ -1,0 +1,8 @@
+[
+  "%SystemRoot%",
+  "%SystemDrive%\\Program Files",
+  "%SystemDrive%\\Program Files (x86)",
+  "%SystemDrive%\\ProgramData",
+  "%SystemDrive%\\$Recycle.Bin",
+  "%SystemDrive%\\System Volume Information"
+]
