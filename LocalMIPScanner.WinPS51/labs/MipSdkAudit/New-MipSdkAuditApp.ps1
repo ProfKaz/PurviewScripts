@@ -4,12 +4,13 @@
 param(
     [Parameter(Mandatory)][guid] $TenantId,
     [guid] $ClientId = [guid]::Empty,
-    [ValidateNotNullOrEmpty()][string] $ConfigPath = (Join-Path $PSScriptRoot 'policy-audit.json'),
+    [ValidateNotNullOrEmpty()][string] $ConfigPath,
     [ValidateNotNullOrEmpty()][string] $DisplayName = 'LocalMIPScanner MIP SDK Lab',
     [ValidateNotNullOrEmpty()][string] $LogoPath,
     [switch] $IncludeRightsManagement
 )
 
+if (-not $ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'policy-audit.json' }
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($TenantId -eq [guid]::Empty) { throw 'Specify the GUID of the lab tenant.' }

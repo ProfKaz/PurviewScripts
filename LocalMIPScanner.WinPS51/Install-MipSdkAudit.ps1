@@ -3,11 +3,12 @@
 [CmdletBinding()]
 param(
     [ValidateNotNullOrEmpty()][string] $Ref = 'main',
-    [ValidateNotNullOrEmpty()][string] $Destination = $PSScriptRoot,
+    [ValidateNotNullOrEmpty()][string] $Destination,
     [string] $DotNetPath
 )
 
 . (Join-Path $PSScriptRoot 'WinPSCompatibility.ps1')
+if (-not $Destination) { $Destination = $PSScriptRoot }
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($env:OS -ne 'Windows_NT') { throw 'The MIP SDK lab requires Windows.' }

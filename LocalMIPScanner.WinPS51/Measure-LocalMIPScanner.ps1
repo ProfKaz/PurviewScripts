@@ -5,7 +5,7 @@ param(
     [ValidateSet('Inventory', 'ContentAudit', 'PolicyAudit', 'SdkSelfTest')]
     [string[]] $Scenario = @('Inventory'),
     [string[]] $Root,
-    [string] $ConfigDirectory = (Join-Path $PSScriptRoot 'Config'),
+    [string] $ConfigDirectory,
     [string] $LogDirectory = (Join-Path $env:LOCALAPPDATA 'LocalMIPScanner.WinPS51\Logs'),
     [string] $PolicyConfig,
     [string] $AuditLog,
@@ -17,10 +17,12 @@ param(
     [ValidateSet('Normal', 'BelowNormal', 'Idle')][string] $Priority = 'Normal',
     [ValidateRange(0, 2147483647)][int] $MaxSeconds = 0,
     [ValidateRange(0, 2147483647)][int] $MaxDirectories = 0,
-    [string] $ReportDirectory = (Join-Path $LogDirectory "Measurements\$([guid]::NewGuid().ToString('N'))")
+    [string] $ReportDirectory
 )
 
 . (Join-Path $PSScriptRoot 'WinPSCompatibility.ps1')
+if (-not $ConfigDirectory) { $ConfigDirectory = Join-Path $PSScriptRoot 'Config' }
+if (-not $ReportDirectory) { $ReportDirectory = Join-Path $LogDirectory "Measurements\$([guid]::NewGuid().ToString('N'))" }
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($env:OS -ne 'Windows_NT') { throw 'Resource measurement requires Windows.' }

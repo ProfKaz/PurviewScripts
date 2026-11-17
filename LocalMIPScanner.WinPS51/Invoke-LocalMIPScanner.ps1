@@ -7,7 +7,7 @@ param(
     [ValidateNotNullOrEmpty()]
     [string[]] $Root,
 
-    [string] $ConfigDirectory = (Join-Path $PSScriptRoot 'Config'),
+    [string] $ConfigDirectory,
 
     [string] $LogDirectory = (Join-Path $env:LOCALAPPDATA 'LocalMIPScanner.WinPS51\Logs'),
 
@@ -18,6 +18,7 @@ param(
     [ValidateRange(1, 86400)] [int] $IdleSeconds = 60
 )
 
+if (-not $ConfigDirectory) { $ConfigDirectory = Join-Path $PSScriptRoot 'Config' }
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 

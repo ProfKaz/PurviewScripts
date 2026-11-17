@@ -15,7 +15,7 @@ unblocks PowerShell scripts. Does not require Git or administrator privileges.
 [CmdletBinding()]
 param(
     [ValidateNotNullOrEmpty()]
-    [string] $Destination = $PSScriptRoot,
+    [string] $Destination,
     [ValidatePattern('^[a-zA-Z0-9._/-]+$')]
     [string] $Ref = 'main',
     [switch] $Unblock,
@@ -23,6 +23,7 @@ param(
 )
 
 . (Join-Path $PSScriptRoot 'WinPSCompatibility.ps1')
+if (-not $Destination) { $Destination = $PSScriptRoot }
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
