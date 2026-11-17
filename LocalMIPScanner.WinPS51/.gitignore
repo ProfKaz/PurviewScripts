@@ -1,0 +1,5 @@
+Logs/
+bin/
+obj/
+.install/
+policy-audit.json
