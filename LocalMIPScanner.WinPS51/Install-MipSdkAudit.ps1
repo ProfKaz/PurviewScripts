@@ -7,7 +7,6 @@ param(
     [string] $DotNetPath
 )
 
-. (Join-Path $PSScriptRoot 'WinPSCompatibility.ps1')
 if (-not $Destination) { $Destination = $PSScriptRoot }
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -75,8 +74,18 @@ function Get-GitBlobHash {
     try {
         $hash.AppendData([Text.Encoding]::ASCII.GetBytes("blob $($bytes.Length)" + [char]0))
         $hash.AppendData($bytes)
-        (ConvertTo-WinPSHex ($hash.GetHashAndReset()))
+        [BitConverter]::ToString($hash.GetHashAndReset()).Replace('-', '')
     } finally { $hash.Dispose() }
+}
+
+# Bootstrap from a standalone script. State and runtime helpers are installed as payload.
+function Publish-InstallerFile {
+    param([string] $Source, [string] $Destination)
+    if ([IO.File]::Exists($Destination)) {
+        [IO.File]::Replace($Source, $Destination, [NullString]::Value)
+    } else {
+        [IO.File]::Move($Source, $Destination)
+    }
 }
 
 $repository = 'ProfKaz/PurviewScripts'
@@ -147,7 +156,7 @@ try {
                     [void] [IO.Directory]::CreateDirectory($backup)
                     [IO.File]::Copy($target, (Join-Path $backup $name))
                 }
-                Publish-WinPSFile $downloads[$name] $target
+                Publish-InstallerFile $downloads[$name] $target
             }
             if ($name.EndsWith('.ps1')) { Unblock-File -LiteralPath $target }
         }

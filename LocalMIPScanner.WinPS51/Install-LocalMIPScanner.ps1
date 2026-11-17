@@ -22,10 +22,19 @@ param(
     [switch] $NoPrompt
 )
 
-. (Join-Path $PSScriptRoot 'WinPSCompatibility.ps1')
 if (-not $Destination) { $Destination = $PSScriptRoot }
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# Bootstrap from a standalone script. State and runtime helpers are installed as payload.
+function Publish-InstallerFile {
+    param([string] $Source, [string] $Destination)
+    if ([IO.File]::Exists($Destination)) {
+        [IO.File]::Replace($Source, $Destination, [NullString]::Value)
+    } else {
+        [IO.File]::Move($Source, $Destination)
+    }
+}
 
 $repository = 'ProfKaz/PurviewScripts'
 $sourcePrefix = 'LocalMIPScanner.WinPS51/'
@@ -41,7 +50,7 @@ function Get-GitBlobHash {
     try {
         $hasher.AppendData($prefix)
         $hasher.AppendData($bytes)
-        return (ConvertTo-WinPSHex ($hasher.GetHashAndReset())).ToLowerInvariant()
+        return [BitConverter]::ToString($hasher.GetHashAndReset()).Replace('-', '').ToLowerInvariant()
     } finally { $hasher.Dispose() }
 }
 
@@ -87,9 +96,9 @@ $staging = Join-Path $destinationRoot ('.install-staging-' + $stamp)
 $backup = Join-Path $destinationRoot ('.installer-backups\' + $stamp)
 $previous = @{}
 if ([IO.File]::Exists($manifestPath)) {
-    $oldManifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-WinPSJson
-    if ($oldManifest.repository -eq $repository -and $oldManifest.files -is [Collections.IDictionary]) {
-        $previous = $oldManifest.files
+    $oldManifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    if ($oldManifest.PSObject.Properties['repository'] -and $oldManifest.repository -eq $repository -and $oldManifest.PSObject.Properties['files'] -and $oldManifest.files -is [pscustomobject]) {
+        foreach ($file in $oldManifest.files.PSObject.Properties) { $previous[$file.Name] = $file.Value }
     }
 }
 
@@ -147,7 +156,7 @@ try {
             [IO.File]::Copy($item.Target, $backupFile, $false)
             Write-Host "BACKUP    $($item.Relative) -> $backupFile"
         }
-        Publish-WinPSFile $item.Temp $item.Target
+        Publish-InstallerFile $item.Temp $item.Target
     }
 
     # Remove only stale files installed by this tool and unchanged since its prior run.
@@ -175,7 +184,7 @@ try {
     } | ConvertTo-Json -Depth 10
     $manifestTemp = Join-Path $staging 'manifest.tmp'
     [IO.File]::WriteAllText($manifestTemp, $newManifest, [Text.UTF8Encoding]::new($false))
-    Publish-WinPSFile $manifestTemp $manifestPath
+    Publish-InstallerFile $manifestTemp $manifestPath
 } finally {
     if ([IO.Directory]::Exists($staging)) { [IO.Directory]::Delete($staging, $true) }
 }
