@@ -12,10 +12,13 @@ Edición de prueba de M1–M5 para Windows PowerShell 5.1 de 64 bits. El estado 
 
 ## Preparación
 
-Desde el repositorio descargado o clonado en la referencia del PR, copia **esta carpeta completa** a `C:\Deploy\LocalMIPScanner.WinPS51`. Abre **Windows PowerShell 5.1 x64** con la cuenta de prueba. Si descargaste el ZIP, desbloquéalo antes de extraerlo. Guarda el SHA de la referencia y la versión del cliente instalado.
+Descarga únicamente `Install-LocalMIPScanner.ps1` e `Install-MipSdkAudit.ps1` de esta edición a `C:\Deploy\LocalMIPScanner.WinPS51`. Cada instalador puede arrancar por separado. Abre **Windows PowerShell 5.1 x64** con la cuenta de prueba. Usa la misma referencia en ambos instaladores y conserva el SHA que muestran. La referencia predeterminada es `main`. Para probar una rama antes del merge, usa `-Ref` explícitamente en ambos.
 
 ```powershell
 Set-Location C:\Deploy\LocalMIPScanner.WinPS51
+$ref = 'main'
+Unblock-File -LiteralPath '.\Install-LocalMIPScanner.ps1', '.\Install-MipSdkAudit.ps1'
+.\Install-LocalMIPScanner.ps1 -Ref $ref -Unblock -NoPrompt
 $PSVersionTable.PSVersion
 [Environment]::Is64BitProcess
 Get-Module -ListAvailable PurviewInformationProtection | Select-Object Name, Version
@@ -30,7 +33,6 @@ foreach ($test in Get-ChildItem .\tests\Test-*.ps1 | Sort-Object Name) {
 PowerShell 5.1 inicia el laboratorio como proceso externo. El laboratorio conserva .NET 10 x64 y MIP File SDK 1.18.148. El módulo del cliente Purview 3.2.92.0 es un control independiente. Su instalación no cambia la biblioteca que usa el laboratorio. El inventario y la auditoría local se pueden probar antes de instalar .NET.
 
 ```powershell
-$ref = 'feat/localmipscanner-winps51'
 $lab = .\Install-MipSdkAudit.ps1 -Ref $ref
 $sdk = @{ DotNetPath = $lab.DotNetPath; LabAssembly = $lab.LabAssembly }
 .\Measure-LocalMIPScanner.ps1 -Scenario SdkSelfTest @sdk
@@ -53,4 +55,11 @@ if ($LASTEXITCODE -ne 0) { throw 'SSO failed' }
 4. Mide inventario con `.\Measure-LocalMIPScanner.ps1 -Scenario Inventory -Root $root -RunCount 2`. Conserva los `metrics.json` y compara tiempo efectivo de CPU, duración, memoria y contadores de trabajo.
 5. Después de M1–M5, ejecuta el piloto de [Activity Explorer](labs/MipSdkAudit/ACTIVITY-PILOT.md) en la misma sesión, con una copia nueva. Busca por la hora UTC y el nombre del archivo. Haz el control del módulo Purview con otro archivo equivalente. Conserva el detalle de Purview Audit si el export de Activity Explorer no trae aplicación o proceso.
 
-El instalador de actualización `Install-LocalMIPScanner.ps1` usa el ayudante local `WinPSCompatibility.ps1`. Ambos se distribuyen juntos. Los directorios de compilación del SDK y los archivos de trabajo del usuario quedan fuera del control de versiones.
+## Dependencias y trazabilidad
+
+| Componente | Requisito y evidencia |
+| --- | --- |
+| Ambos instaladores | Windows PowerShell 5.1 x64 y acceso HTTPS a la API de GitHub y a `raw.githubusercontent.com`. Resuelven la referencia a un SHA y verifican los archivos descargados contra el árbol de Git. |
+| Inventario y auditoría local | El instalador del scanner descarga configuración, módulos, pruebas y `WinPSCompatibility.ps1`. El runtime usa .NET Framework incluido en Windows. La lista de archivos y hashes queda en `.localmipscanner-winps51-install.json`. |
+| Laboratorio | El instalador del SDK descarga el código del laboratorio. Usa un SDK .NET 10 x64 indicado por `-DotNetPath`, una instalación compatible detectada, o descarga una copia verificada desde Microsoft. La compilación restaura los paquetes de NuGet declarados en `labs/MipSdkAudit/MipSdkAudit.csproj`. Registra `SourceCommit`, `DotNetPath`, `LabAssembly` y `SelfTestPassed`. |
+| Pruebas con el tenant | La prueba autenticada usa Windows WAM, la configuración del piloto y una aplicación Entra autorizada. Los módulos Microsoft Graph solo se necesitan al ejecutar el script opcional de registro de la aplicación. El cliente Purview con `Get-FileStatus` y `Set-FileLabel` se usa como control independiente en M6. |
