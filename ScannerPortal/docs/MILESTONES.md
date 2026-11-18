@@ -12,6 +12,13 @@ Cada milestone se cierra por evidencia de aceptación, no por porcentaje de arch
 | SP5 — Instalación desde GitHub y piloto integral | Pendiente | SP4 | Release verificable, instalación limpia, actualización/rollback, smoke test extremo a extremo y runbook. Evidencia con scanner oficial y Local MIP Scanner. |
 | SP6 — Operación y endurecimiento | Pendiente | SP5 | Rotación de certificados, retención, alertas de retraso/errores, métricas y recuperación. Ejercicio de revocación, corrupción de lote y pérdida de conectividad. |
 
+| SP7 — Retención y compactación | Posterior, pendiente | SP6 | Políticas de retención, compresión y compactación recuperable, snapshots/deltas, conteos y trazabilidad preservados. Contabilizar versiones y papelera. |
+| SP8 — Capacidad de grandes organizaciones | Posterior, pendiente | SP7 | Escenarios de 1.000 / 10.000 / 100.000 usuarios, cuotas, concurrencia, latencia y decisión de almacenamiento histórico basada en medición. |
+
+## Integración LocalMIPScanner 5.1
+
+SP2 debe definir biblioteca de ingesta con permisos efectivos, identidad central y autenticación de agentes. SP3 incorpora outbox local, receptor, validación de emisor, carga idempotente y recibo verificado. Los hitos SP7 y SP8 son posteriores al piloto integral. Ver [contrato de integración y aceptación](LOCAL-REPORT-INGESTION.md).
+
 ## Trabajo concreto por milestone
 
 ### SP1
