@@ -62,3 +62,7 @@ Preferir permisos seleccionados de Graph con concesión explícita a los recurso
 SharePoint es el punto de partida del piloto. Evitar consultas de listas sin índice y la carga de todos los eventos en el cliente. Medir con volumen y filtros reales; si supera objetivos, mantener SharePoint como portal/configuración y mover consulta histórica a ADX mediante API autenticada. Nunca exponer credenciales ADX al frontend. La decisión de capacidad es salida de SP4.
 
 Referencias: [SPFx](https://learn.microsoft.com/en-us/sharepoint/dev/spfx/sharepoint-framework-overview), [permisos seleccionados](https://learn.microsoft.com/en-us/graph/permissions-selected-overview), [autenticación Key Vault](https://learn.microsoft.com/en-us/azure/key-vault/general/authentication).
+
+## Integración de informes locales
+
+La ruta LocalMIPScanner → outbox → receptor autenticado → ScannerPortalLanding se detalla en [Integración de informes locales](LOCAL-REPORT-INGESTION.md). La identidad central escribe en SharePoint y el agente entrega mediante su autorización de emisor. Retención/compactación y capacidad se planifican en SP7 y SP8.
