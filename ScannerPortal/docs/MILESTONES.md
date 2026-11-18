@@ -65,3 +65,7 @@ SP2 debe definir biblioteca de ingesta con permisos efectivos, identidad central
 ## Definition of Done
 
 Código revisable, pruebas pertinentes y evidencia enlazada; sin secretos ni datos de producción; documentación y migración actualizadas; permisos comprobados con identidades permitidas y denegadas; errores no tratados como éxito. Un milestone que dependa de Microsoft 365 no se cierra con pruebas offline.
+
+## Secuencia de validación integral
+
+El [plan de pruebas T00–T14](END-TO-END-TEST-PLAN.md) concreta SP1–SP6 para LocalMIPScanner 5.1, identidades, entrega y portal. SP7/SP8 permanecen posteriores al piloto.
