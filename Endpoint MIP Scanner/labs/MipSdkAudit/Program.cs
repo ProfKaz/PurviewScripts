@@ -86,7 +86,7 @@ try
     {
         ApplicationId = selfTest ? "b21d7240-9a24-4913-ab33-212c5b7cf88a" : clientId.ToString(),
         ApplicationName = "LocalMIPScanner Lab",
-        ApplicationVersion = "1.0"
+        ApplicationVersion = typeof(OfficeLabelCopy).Assembly.GetName().Version!.ToString(3)
     };
     var configuration = new MipConfiguration(app, fixture.FullName,
         Microsoft.InformationProtection.LogLevel.Error, selfTest, CacheStorageType.InMemory)
