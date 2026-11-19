@@ -1,0 +1,256 @@
+{
+  "SchemaVersion": 1,
+  "SuiteVersion": "1.1.0",
+  "Project": "Endpoint MIP Scanner",
+  "Bootstrap": "Install-EndpointMIPScanner.ps1",
+  "Scripts": [
+    {
+      "Path": "LocalMIPScanner.WinPS51/Install-LocalMIPScanner.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "91bdf292-1ff1-47f4-b0d0-020ab1607ef5"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/Invoke-LocalMIPScanner.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "ad7c5a2e-6eb7-4fbd-9195-b0368dd692a5"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/LocalMIPCheckpoint.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "7c0d3dbd-0194-44f2-abff-e46b1674bc67"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/LocalMIPContentAudit.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "b8510eee-fb61-4131-888b-62da0c43890f"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/LocalMIPScanner.psm1",
+      "Version": "1.1.0",
+      "TrackingId": "618abe92-fc46-4d02-a9b1-f37377ae2206"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/LocalMIPState.psm1",
+      "Version": "1.1.0",
+      "TrackingId": "548fa14a-abb5-4547-80c0-cf5cd9c02d3c"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/Measure-LocalMIPScanner.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "70cfd2d3-79bd-479e-bcba-c8a34269f884"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/WinPSCompatibility.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "53e799ae-9259-4aad-b6ec-e6444244efb2"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/tests/Measure-Inventory.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "59cbe0d4-0a16-4109-8764-9c53ee580e54"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/tests/Test-Checkpoint.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "fa340e23-8e25-4457-958a-e2ff3f59a8cb"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/tests/Test-ContentAudit.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "bb62cbb2-88de-45b1-9485-e55cccf4fd3b"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/tests/Test-Incremental.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "cefe55f5-3414-452b-865b-a50be8f58a1e"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/tests/Test-Inventory.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "1aecfb17-7474-4a57-8d5a-eb7f084acd80"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/tests/Test-Measurement.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "5b125197-5a42-4ebd-83dd-8aa6f611d6f2"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/tests/Test-Restart.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "109f459f-b176-49aa-b555-4a13a5ba6be7"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/tests/Test-StateFormat.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "4b27dccf-a12d-41cf-aa57-e1eb65fddc7c"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/Install-LocalMIPScanner.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "a789f51c-4bf4-4d1f-ae08-19a9dd6f9614"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/Invoke-LocalMIPScanner.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "7ec6aab1-a5f8-4628-9c16-712e1b4b243b"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/LocalMIPCheckpoint.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "2d800c40-77f6-4acd-bcbe-3a4fbf32eeff"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/LocalMIPContentAudit.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "aca05f79-4413-4d97-ae17-7221db70b83f"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/LocalMIPScanner.psm1",
+      "Version": "1.1.0",
+      "TrackingId": "6e3d20f3-5356-4896-9ca5-16246e303425"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/LocalMIPState.psm1",
+      "Version": "1.1.0",
+      "TrackingId": "f8d358a4-48ca-4b6f-9991-0a8f19b78be3"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/Measure-LocalMIPScanner.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "b25c7e57-7ee6-4a1d-9ef4-3c35bbaa6e20"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/tests/Measure-Inventory.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "30fa4a1c-4611-4575-b4c1-073caaf2f9d9"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/tests/Test-Checkpoint.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "d30023df-195c-444b-95d3-8f38bfb8beec"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/tests/Test-ContentAudit.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "f089c503-3d4e-4a68-98e6-f170cf7cce1e"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/tests/Test-Incremental.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "349f5430-9274-497e-8431-bee5c2707e5e"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/tests/Test-Inventory.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "2a7b13f9-e87d-4d58-ac35-f7416cbf7e47"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/tests/Test-Measurement.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "b704fe17-8d0a-4c49-a814-7bf41bc02287"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/tests/Test-Restart.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "8cf655ad-ed43-47f8-ad50-f2fe82315030"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS7[Pending]/tests/Test-StateFormat.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "3ae61f60-4e28-4ade-8b7f-b1665d163d6c"
+    },
+    {
+      "Path": "ScannerPortal/deployment/Install-ScannerPortalFoundation.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "11feeccf-cc31-439b-baae-1fa367a6717c"
+    },
+    {
+      "Path": "ScannerPortal/deployment/New-ScannerPortalPilot.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "1f5569d4-deb5-44b3-8fca-307cc31b2746"
+    },
+    {
+      "Path": "ScannerPortal/deployment/Register-ScannerPortalSetupApp.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "f7793dec-25e3-4a4a-a11a-d7175bb16640"
+    },
+    {
+      "Path": "ScannerPortal/src/ScannerPortal.Activity.psm1",
+      "Version": "1.1.0",
+      "TrackingId": "7ca3cb69-908e-4b98-a49e-f1ac08d422d8"
+    },
+    {
+      "Path": "ScannerPortal/tests/Test-ActivityScope.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "26c94860-73b6-4a9e-adcc-983d4891db94"
+    },
+    {
+      "Path": "ScannerPortal/tests/Test-PilotPlan.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "7082c996-0b8b-4c1b-a258-a54e41792795"
+    },
+    {
+      "Path": "deployment/Install-MipSdkAudit.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "49a0bd91-1aa8-48c4-81f0-564cca166544"
+    },
+    {
+      "Path": "labs/MipSdkAudit/New-MipSdkAuditApp.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "fc9c18ec-8592-4726-8383-5b41b835eb49"
+    },
+    {
+      "Path": "Install-EndpointMIPScanner.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "0576cc7a-692e-4876-bfe5-d1fb62a30116"
+    },
+    {
+      "Path": "deployment/Invoke-PortalSetup.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "6def98b7-2ffc-414f-b51b-8cca247a6168"
+    },
+    {
+      "Path": "tests/Test-SuiteLayout.ps1",
+      "Version": "1.1.0",
+      "TrackingId": "3832d82b-5823-4ecd-b062-801856020826"
+    }
+  ],
+  "Dependencies": [
+    {
+      "Version": "5.1 x64",
+      "Stage": "Local",
+      "Name": "Windows PowerShell",
+      "Source": "Windows"
+    },
+    {
+      "Version": "10.0 x64",
+      "Stage": "Local",
+      "Name": ".NET SDK",
+      "Source": "Microsoft release metadata; SHA512 verified"
+    },
+    {
+      "Version": "14.x x64",
+      "Stage": "Local",
+      "Name": "Visual C++ runtime",
+      "Source": "Microsoft signed redistributable when missing"
+    },
+    {
+      "Version": "7.6.0",
+      "Stage": "Portal",
+      "Name": "PowerShell",
+      "Source": "Official PowerShell GitHub release; SHA256 verified"
+    },
+    {
+      "Version": "3.2.0",
+      "Stage": "Portal",
+      "Name": "PnP.PowerShell",
+      "Source": "PSGallery"
+    },
+    {
+      "Version": "Installed version or PSGallery current",
+      "Stage": "MipApp/Portal",
+      "Name": "Microsoft.Graph.Authentication + Applications",
+      "Source": "PSGallery"
+    }
+  ]
+}
