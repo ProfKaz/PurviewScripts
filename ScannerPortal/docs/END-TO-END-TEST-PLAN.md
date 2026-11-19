@@ -4,23 +4,24 @@ Estado: plan propuesto. Las pruebas siguientes están pendientes hasta disponer 
 
 ## Objetivo final y arquitectura de referencia
 
-Los agentes Windows PowerShell 5.1 inventarían y analizan archivos según un perfil versionado, conservan resultados offline y entregan lotes idempotentes a un receptor HTTPS autenticado. La identidad central escribe en una biblioteca restringida de SharePoint Online. El portal muestra estado actual, historial y cobertura. Una ausencia en Purview no elimina el resultado local.
+El piloto se limita a Microsoft 365 E3, SharePoint Online y equipos Windows existentes. Una suscripción Azure y servicios de pago adicionales quedan fuera de los requisitos del piloto. Validar por separado las capacidades de clasificación disponibles con el licenciamiento y la política del tenant. Las capacidades observadas en un tenant de laboratorio no certifican que todas estén incluidas en E3.
 
-Host de referencia para el piloto: Azure Function autenticada por Entra para recepción y un procesador asíncrono. Confirmar suscripción, región, coste y dependencias en T00 antes de aprovisionar. Usar identidad administrada para acceso central a Graph cuando la concesión seleccionada esté validada; alternativa explícita, service principal con certificado protegido. Un acuse HTTP de recepción no equivale a persistencia verificada en SharePoint. El agente consulta el recibo final.
+Flujo base: scanner PS5.1 → outbox local → publicador PS5.1 mediante tarea de Windows → Graph → biblioteca SharePoint restringida → proyecciones y portal. El publicador usa autenticación de aplicación con certificado; el usuario escaneado queda como sujeto del informe. Procesamiento y verificación se ejecutan en un equipo Windows existente del piloto, con disponibilidad registrada. Los recibos y checkpoints se guardan como archivos. Las proyecciones usan listas SharePoint indexadas.
 
-La autenticación inicial del agente al receptor usa la cuenta de Windows con WAM y un scope de API limitado a enviar sus informes, sin permiso SharePoint del usuario. El receptor impone identidad/tenant y valida deviceId contra el registro enrolado; un deviceId declarado por el cliente no demuestra por sí solo la identidad del equipo. La autorización por dispositivo y certificados individuales constituye una alternativa de despliegue que debe fijarse antes de T02 si se requiere identidad independiente del usuario. El escritor de SharePoint siempre es la identidad central.
+Separar la tarea que escanea bajo la sesión del usuario (WAM para MIP cuando corresponda) de la tarea publicadora bajo una identidad local de servicio. La clave privada del publicador tiene ACL restringida a esa identidad y administradores. El proceso de usuario entrega archivos en una cola local con permisos definidos y el publicador copia y sella los bytes antes de transmitirlos. No asumir que un informe de un endpoint comprometido es evidencia incorruptible.
 
-El enrolamiento y el consentimiento se realizan en la preparación administrativa. La ejecución rutinaria no abre diálogos: una exigencia de MFA, consentimiento o Conditional Access deja el lote pendiente y genera diagnóstico local. Los informes mantienen separado el sujeto escaneado, el emisor autenticado y la identidad central de persistencia.
+El piloto inicial prueba un equipo y una aplicación publicadora con certificado local. Antes de ampliar a varios equipos se requieren identidades/grants separables y revocables por emisor, o un recolector Windows existente. No distribuir un único certificado compartido con acceso a toda la biblioteca. La biblioteca no concede acceso al usuario final. Un administrador local conserva capacidad de intervención sobre su dispositivo.
 
 ## Identidades y aprovisionamiento automático
 
 | Identidad | Tratamiento y permisos |
 | --- | --- |
-| Aplicación MIP existente | Reutilizar tenantId/clientId de la configuración validada. Conservar su permiso de política MIP. |
-| Aplicación de instalación de ScannerPortal | Reutilizar por ClientId explícito si pertenece al tenant y al propósito administrativo esperado. Los scripts existentes de registro no son todavía un upsert. |
-| API receptora | Crear o reutilizar por ID persistido, exponer un scope de envío, exigir tenant y autorización del emisor. Agregar a la aplicación cliente existente el permiso delegado de esta API y consentir administrativamente según corresponda. |
-| Identidad de ingesta | Crear/reutilizar una identidad administrada o un service principal dedicado. Preferir Lists.SelectedOperations.Selected con concesión write en ScannerPortalLanding; validar las operaciones concretas de drive. Alternativa, Sites.Selected write en un sitio dedicado. |
-| Procesador / portal | Conceder lectura del landing y escritura de proyecciones según su función. Analistas acceden a proyecciones; usuarios finales sin acceso al landing. |
+| Aplicación MIP existente | Reutilizar tenantId/clientId y permiso MIP de la configuración validada. |
+| Aplicación de instalación de ScannerPortal | Reutilizar por ClientId explícito para tareas administrativas. Sus scripts existentes todavía requieren PS7.4/PnP y no son un upsert. Esta dependencia se limita al equipo administrador. |
+| Publicador del piloto | Crear/reutilizar aplicación y service principal dedicados con certificado. Probar Files.SelectedOperations.Selected con grant write en la carpeta del emisor para las operaciones de carga y lectura de verificación. Consentimiento y concesión al recurso se comprueban por separado. Si esta operación no funciona con ese alcance, documentar el resultado antes de elegir un alcance mayor. |
+| Procesador / portal | Certificado independiente en un equipo Windows existente, lectura de landing y escritura de proyecciones según función. Analistas acceden a proyecciones. |
+
+El aprovisionador crea biblioteca/carpeta, certificado, credencial pública y grants; conserva IDs y thumbprint. No exporta la clave privada. La reejecución reconoce los recursos existentes y no rota certificados sin solicitar esa operación. El receptor Azure y su API dejan de ser entregables obligatorios. El ID del emisor y la cuenta declarada se validan contra el registro autorizado antes de proyectar sus lotes.
 
 El futuro instalador ofrece Plan y Apply. Antes de cambios, registra tenant, IDs existentes, permisos actuales, recursos y dependencias. Resuelve permisos por resource app y nombre de permiso; conserva permisos existentes y agrega solo los faltantes. Distingue requiredResourceAccess, consentimiento efectivo/appRoleAssignment y concesión al recurso SharePoint. Una app existente no se adopta solo por displayName. Ante duplicados o tenant incorrecto, emite un error con IDs para resolver.
 
@@ -58,13 +59,13 @@ Ejecutar un caso a la vez. Conservar salida JSON resumida, versiones, IDs, times
 | T13 — Operación | Tarea programada bajo sesión acordada, revocación/renovación de credenciales y actualización/rollback. | Recuperación de la última configuración válida, un escritor, cola preservada y métricas de retraso/errores. |
 | T14 — Capacidad piloto | Aumentar emisores sintéticos y volumen por escalones; introducir ráfagas y desconexiones. | Medir CPU/RAM, ancho de banda, latencia p50/p95, backlog, cuotas, errores y consultas frente a SLO de T00. |
 
-T01–T03 y T05–T08 prueban primero lotes sintéticos pequeños sin ejecutar un escaneo completo. T04 puede prepararse en paralelo manualmente al aprovisionamiento, conservando el orden de aceptación de la entrega. El cierre del piloto requiere T00–T14 con evidencia y defectos resueltos; la existencia de código o pruebas offline no cierra permisos ni comportamiento del tenant.
+En T00–T14, las referencias a receptor/API se sustituyen por publicador local y sus concesiones seleccionadas en SharePoint. T01–T03 y T05–T08 prueban primero lotes sintéticos pequeños sin ejecutar un escaneo completo. T04 puede prepararse en paralelo manualmente al aprovisionamiento, conservando el orden de aceptación de la entrega. El cierre del piloto requiere T00–T14 con evidencia y defectos resueltos; la existencia de código o pruebas offline no cierra permisos ni comportamiento del tenant.
 
 ## Entregables de implementación
 
 1. Instaladores independientes desde GitHub con commit/hash y manifiesto de dependencias. Comandos Windows PowerShell 5.1 para agentes. Las herramientas administrativas actuales ScannerPortal requieren PS7.4/PnP; el preflight debe informar esa dependencia y el diseño no obliga a instalarla en endpoints. La identidad central puede aprovisionarse con herramientas de administración compatibles según el host elegido.
 2. Registro automático idempotente de identidades, permisos y recursos, plan, apply y validación negativa.
-3. Generador local y outbox, cliente de envío, receptor autenticado y verificador/recibos.
+3. Generador local y outbox, cliente de envío, publicador autenticado y verificador/recibos.
 4. Procesador idempotente y reportes del portal con métricas de ingesta.
 5. Runner de pruebas por caso que genere evidencia saneada y mantenga el contexto sin depender de variables de una sesión previa.
 
@@ -73,3 +74,7 @@ T01–T03 y T05–T08 prueban primero lotes sintéticos pequeños sin ejecutar u
 SP7 implementa retención/compactación con reconstrucción, conteos/hash antes y después, versiones/papelera y conservación legal. SP8 prueba escenarios de 1.000, 10.000 y 100.000 usuarios, además de dispositivos, eventos/día, bytes y retención; decide si el histórico necesita otro almacenamiento conservando portal y configuración SharePoint.
 
 El contrato, particionamiento y entrega idempotente se fijan antes del piloto. Cambios incompatibles incrementan schemaVersion e incluyen migración. La compresión y retención se diseñan desde v1, pero se implementan después; no se agregan servicios de compactación durante T01–T14.
+
+## Escalabilidad con costes explícitos
+
+SP7 conserva el trabajo posterior de retención, compresión y compactación. SP8 evalúa límites de SharePoint, carga del equipo procesador y coste operativo antes de comprometer capacidad. Azure Functions, colas administradas, almacenamiento dedicado y ADX son alternativas posteriores con suscripción y coste adicionales. No son prerrequisitos para demostrar descubrimiento y entrega verificable en el piloto E3.
