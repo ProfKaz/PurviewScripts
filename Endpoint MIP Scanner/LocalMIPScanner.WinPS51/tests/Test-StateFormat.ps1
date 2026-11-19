@@ -1,13 +1,20 @@
 ﻿<#PSScriptInfo
+
 .VERSION 1.1.0
+
 .GUID 4b27dccf-a12d-41cf-aa57-e1eb65fddc7c
+
 .AUTHOR Kaz Demos / ProfKaz
+
 .COMPANYNAME Kaz Demos
+
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
+
 .RELEASENOTES
 2026-11-18  1.1.0  Consolidated Endpoint MIP Scanner layout, shared lab and unified setup.
 Tracking ID: 4b27dccf-a12d-41cf-aa57-e1eb65fddc7c
 #>
+
 <#
 .DESCRIPTION
 Endpoint MIP Scanner component: LocalMIPScanner.WinPS51/tests/Test-StateFormat.ps1.

@@ -1,12 +1,19 @@
 ﻿<#PSScriptInfo
+
 .VERSION 1.1.0
+
 .GUID 3832d82b-5823-4ecd-b062-801856020826
+
 .AUTHOR Kaz Demos / ProfKaz
+
 .COMPANYNAME Kaz Demos
+
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
+
 .RELEASENOTES
 2026-11-18  1.1.0  Validate suite layout and PS5.1 syntax after consolidation.
 #>
+
 <#
 .DESCRIPTION
 Endpoint MIP Scanner component: tests/Test-SuiteLayout.ps1.

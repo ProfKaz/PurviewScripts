@@ -1,13 +1,20 @@
 ﻿<#PSScriptInfo
+
 .VERSION 1.1.0
+
 .GUID 30fa4a1c-4611-4575-b4c1-073caaf2f9d9
+
 .AUTHOR Kaz Demos / ProfKaz
+
 .COMPANYNAME Kaz Demos
+
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
+
 .RELEASENOTES
 2026-11-18  1.1.0  Consolidated Endpoint MIP Scanner layout, shared lab and unified setup.
 Tracking ID: 30fa4a1c-4611-4575-b4c1-073caaf2f9d9
 #>
+
 <#
 .DESCRIPTION
 Endpoint MIP Scanner component: LocalMIPScanner.WinPS7[Pending]/tests/Measure-Inventory.ps1.

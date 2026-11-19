@@ -1,13 +1,20 @@
 ﻿<#PSScriptInfo
+
 .VERSION 1.1.0
+
 .GUID 26c94860-73b6-4a9e-adcc-983d4891db94
+
 .AUTHOR Kaz Demos / ProfKaz
+
 .COMPANYNAME Kaz Demos
+
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
+
 .RELEASENOTES
 2026-11-18  1.1.0  Consolidated Endpoint MIP Scanner layout, shared lab and unified setup.
 Tracking ID: 26c94860-73b6-4a9e-adcc-983d4891db94
 #>
+
 <#
 .DESCRIPTION
 Endpoint MIP Scanner component: ScannerPortal/tests/Test-ActivityScope.ps1.

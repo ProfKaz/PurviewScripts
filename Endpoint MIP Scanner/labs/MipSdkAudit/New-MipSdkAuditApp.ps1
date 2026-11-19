@@ -1,13 +1,20 @@
 ﻿<#PSScriptInfo
+
 .VERSION 1.1.0
+
 .GUID fc9c18ec-8592-4726-8383-5b41b835eb49
+
 .AUTHOR Kaz Demos / ProfKaz
+
 .COMPANYNAME Kaz Demos
+
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
+
 .RELEASENOTES
 2026-11-18  1.1.0  Consolidated Endpoint MIP Scanner layout, shared lab and unified setup.
 Tracking ID: fc9c18ec-8592-4726-8383-5b41b835eb49
 #>
+
 <#
 .DESCRIPTION
 Endpoint MIP Scanner component: labs/MipSdkAudit/New-MipSdkAuditApp.ps1.

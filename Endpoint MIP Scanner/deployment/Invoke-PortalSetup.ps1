@@ -1,13 +1,20 @@
 ﻿<#PSScriptInfo
+
 .VERSION 1.1.0
+
 .GUID 6def98b7-2ffc-414f-b51b-8cca247a6168
+
 .AUTHOR Kaz Demos / ProfKaz
+
 .COMPANYNAME Kaz Demos
+
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
+
 .RELEASENOTES
 2026-11-18  1.1.0  Consolidated Endpoint MIP Scanner layout, shared lab and unified setup.
 Tracking ID: 6def98b7-2ffc-414f-b51b-8cca247a6168
 #>
+
 <#
 .DESCRIPTION
 Endpoint MIP Scanner component: deployment/Invoke-PortalSetup.ps1.
