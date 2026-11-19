@@ -9,6 +9,9 @@
 Tracking ID: 618abe92-fc46-4d02-a9b1-f37377ae2206
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: LocalMIPScanner.WinPS51/LocalMIPScanner.psm1.
+.NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS51/LocalMIPScanner.psm1
 Version     : 1.1.0

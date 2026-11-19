@@ -9,6 +9,9 @@
 Tracking ID: 0576cc7a-692e-4876-bfe5-d1fb62a30116
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: Install-EndpointMIPScanner.ps1.
+.NOTES
 HISTORY
 Script      : Install-EndpointMIPScanner.ps1
 Version     : 1.1.0
@@ -110,9 +113,9 @@ function Install-AdministrativePowerShell {
     }
     $temporary = Join-Path $work ('pwsh-' + [guid]::NewGuid().ToString('N'))
     Expand-Archive -LiteralPath $archive -DestinationPath $temporary
-    & (Join-Path $temporary 'pwsh.exe') -NoProfile -Command 'exit 0'
-    if ($LASTEXITCODE -ne 0) { throw 'Downloaded administrative PowerShell failed to start.' }
     [IO.Directory]::Move($temporary, $directory)
+    & $executable -NoProfile -Command 'exit 0'
+    if ($LASTEXITCODE -ne 0) { throw 'Downloaded administrative PowerShell failed to start.' }
     return $executable
 }
 
@@ -130,6 +133,8 @@ try {
         $_.type -eq 'blob' -and $_.mode -in '100644','100755' -and $_.path.StartsWith($prefix)
     })
     if ($files.Count -eq 0) { throw 'Suite not found in this reference.' }
+    Write-Host "Endpoint MIP Scanner 1.1.0 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
+    Write-Host "Verifying $($files.Count) suite files in $root"
     $stamp = [guid]::NewGuid().ToString('N')
     $staging = Join-Path $work $stamp
     [void][IO.Directory]::CreateDirectory($staging)
@@ -182,6 +187,7 @@ try {
         Completed = @(); Status = 'Running'; RestartRequired = $false; VisualCppPackageSha256 = $null
     }
     $state.Completed += 'VerifiedDownload'
+    Write-Host "Verified suite. Published $($downloads.Count) changed files."
     Write-SetupJson (Join-Path $work 'status.json') $state
     if ($Stage -ne 'Download') {
         Install-VisualCpp

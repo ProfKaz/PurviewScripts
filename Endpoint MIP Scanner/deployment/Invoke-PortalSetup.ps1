@@ -9,6 +9,9 @@
 Tracking ID: 6def98b7-2ffc-414f-b51b-8cca247a6168
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: deployment/Invoke-PortalSetup.ps1.
+.NOTES
 HISTORY
 Script      : deployment/Invoke-PortalSetup.ps1
 Version     : 1.1.0
@@ -116,6 +119,10 @@ $parameters = @{
 if ($ResumeFoundation) { $parameters.ResumeFoundation = $true }
 $result = @(& (Join-Path $suite 'ScannerPortal/deployment/New-ScannerPortalPilot.ps1') @parameters)
 $result | ConvertTo-Json -Depth 12 | Set-Content (Join-Path $EvidenceDirectory 'portal-foundation.json') -Encoding utf8
+@{
+    PowerShell = $PSVersionTable.PSVersion.ToString()
+    Modules = @(Get-Module | Select-Object Name, Version, Path)
+} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $EvidenceDirectory 'portal-dependencies.json') -Encoding utf8
 if (@($result | Where-Object { $_.Status -eq 'AlreadyExistsNeedsReview' }).Count) {
     throw 'Pilot site already exists. Review it and rerun with -ResumeFoundation to provision the foundation.'
 }

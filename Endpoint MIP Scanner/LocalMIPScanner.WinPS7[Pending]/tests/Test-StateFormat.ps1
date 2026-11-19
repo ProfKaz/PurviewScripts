@@ -9,6 +9,9 @@
 Tracking ID: 3ae61f60-4e28-4ade-8b7f-b1665d163d6c
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: LocalMIPScanner.WinPS7[Pending]/tests/Test-StateFormat.ps1.
+.NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS7[Pending]/tests/Test-StateFormat.ps1
 Version     : 1.1.0

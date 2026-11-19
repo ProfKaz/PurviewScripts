@@ -8,6 +8,9 @@
 2026-11-18  1.1.0  Validate suite layout and PS5.1 syntax after consolidation.
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: tests/Test-SuiteLayout.ps1.
+.NOTES
 HISTORY
 Script      : tests/Test-SuiteLayout.ps1
 Version     : 1.1.0

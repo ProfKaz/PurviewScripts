@@ -9,6 +9,9 @@
 Tracking ID: 109f459f-b176-49aa-b555-4a13a5ba6be7
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: LocalMIPScanner.WinPS51/tests/Test-Restart.ps1.
+.NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS51/tests/Test-Restart.ps1
 Version     : 1.1.0

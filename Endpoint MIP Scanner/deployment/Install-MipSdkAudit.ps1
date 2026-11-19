@@ -9,6 +9,9 @@
 Tracking ID: 49a0bd91-1aa8-48c4-81f0-564cca166544
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: deployment/Install-MipSdkAudit.ps1.
+.NOTES
 HISTORY
 Script      : deployment/Install-MipSdkAudit.ps1
 Version     : 1.1.0

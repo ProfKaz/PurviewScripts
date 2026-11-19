@@ -9,6 +9,9 @@
 Tracking ID: d30023df-195c-444b-95d3-8f38bfb8beec
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: LocalMIPScanner.WinPS7[Pending]/tests/Test-Checkpoint.ps1.
+.NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS7[Pending]/tests/Test-Checkpoint.ps1
 Version     : 1.1.0

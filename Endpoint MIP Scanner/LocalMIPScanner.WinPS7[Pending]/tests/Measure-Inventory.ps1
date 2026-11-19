@@ -9,6 +9,9 @@
 Tracking ID: 30fa4a1c-4611-4575-b4c1-073caaf2f9d9
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: LocalMIPScanner.WinPS7[Pending]/tests/Measure-Inventory.ps1.
+.NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS7[Pending]/tests/Measure-Inventory.ps1
 Version     : 1.1.0

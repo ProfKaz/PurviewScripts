@@ -8,13 +8,13 @@ El laboratorio se ejecuta por separado de LocalMIPScanner. Usa .NET 10 x64 en Wi
 
 ## Instalar y verificar
 
-Descarga el instalador en la carpeta desde la que quieras instalar el laboratorio. Usa una sesión dedicada de PowerShell 7.2 o posterior para la instalación y el registro de la aplicación. [Install-MipSdkAudit.ps1](https://github.com/ProfKaz/PurviewScripts/blob/main/Install-MipSdkAudit.ps1)
+Usa el [instalador único](../../README.md) desde Windows PowerShell 5.1 x64. El mismo laboratorio C# sirve a ambas ediciones; el SDK corre en su propio proceso .NET 10.
 
-~~~powershell
-$lab = .\Install-MipSdkAudit.ps1 -Destination 'C:\Deploy\LocalMIPScanner'
-~~~
-
-El instalador resuelve la revisión en GitHub, verifica los hashes de los archivos y guarda una copia de los archivos locales que vaya a reemplazar. Busca un SDK y runtime .NET 10 x64 en la misma instalación. Si hace falta, descarga el SDK de Microsoft, verifica su SHA-512 y lo instala en una carpeta dedicada del perfil. Usa la ruta del ejecutable encontrado para compilar y ejecutar la prueba sin conexión. Puedes seleccionar un ejecutable concreto con `-DotNetPath`. El instalador devuelve las rutas necesarias para los pasos siguientes.
+```powershell
+Set-Location 'C:\Deploy\Endpoint MIP Scanner'
+$lab = Get-Content -LiteralPath '.\.endpoint-install\lab.json' -Raw | ConvertFrom-Json
+& $lab.DotNetPath $lab.LabAssembly --self-test
+```
 
 ## Verificación local
 

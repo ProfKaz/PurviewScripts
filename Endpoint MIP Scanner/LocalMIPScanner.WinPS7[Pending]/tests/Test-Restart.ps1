@@ -9,6 +9,9 @@
 Tracking ID: 8cf655ad-ed43-47f8-ad50-f2fe82315030
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: LocalMIPScanner.WinPS7[Pending]/tests/Test-Restart.ps1.
+.NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS7[Pending]/tests/Test-Restart.ps1
 Version     : 1.1.0

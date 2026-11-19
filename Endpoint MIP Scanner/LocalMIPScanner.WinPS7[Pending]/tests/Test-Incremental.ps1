@@ -9,6 +9,9 @@
 Tracking ID: 349f5430-9274-497e-8431-bee5c2707e5e
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: LocalMIPScanner.WinPS7[Pending]/tests/Test-Incremental.ps1.
+.NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS7[Pending]/tests/Test-Incremental.ps1
 Version     : 1.1.0

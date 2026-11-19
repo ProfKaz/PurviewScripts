@@ -3,8 +3,8 @@
 Run as the signed-in Windows user. Reuse the working WAM pilot configuration and an unprotected, unlabeled Office document. The command creates one labeled copy under a configured root, notifies the File SDK after verification and publication, then reads its label with discovery enabled. The local JSONL records the observed application ID, application name, user, file path and UTC timestamps. A successful notification call does not confirm ingestion.
 
 ```powershell
-Set-Location C:\Deploy\LocalMIPScanner
-$lab = .\Install-MipSdkAudit.ps1 -Ref feat/localmipscanner-m6-activity-pilot
+Set-Location 'C:\Deploy\Endpoint MIP Scanner'
+$lab = Get-Content -LiteralPath '.\.endpoint-install\lab.json' -Raw | ConvertFrom-Json
 $pilot = Join-Path $env:LOCALAPPDATA 'LocalMIPScanner\WamPilot-2ed694536c6149cab3044eb4735ce75f'
 $policyConfig = Join-Path $pilot 'policy-audit.json'
 $root = @( (Get-Content -LiteralPath $policyConfig -Raw | ConvertFrom-Json).roots )[0]
@@ -12,7 +12,7 @@ $id = [guid]::NewGuid().ToString('N').Substring(0, 12)
 $source = Join-Path $root "M6-source-$id.docx"
 $output = Join-Path $root "M6-scanner-$id.docx"
 $control = Join-Path $root "M6-manual-$id.docx"
-Copy-Item -LiteralPath '.\Prueba.docx' -Destination $source -ErrorAction Stop
+Copy-Item -LiteralPath '.\M6-base-limpia.docx' -Destination $source -ErrorAction Stop
 Copy-Item -LiteralPath $source -Destination $control -ErrorAction Stop
 $labelId = Read-Host 'Published label ID (addsProtection=false)'
 & $lab.DotNetPath $lab.LabAssembly --office-activity-pilot $policyConfig $source $output $labelId |

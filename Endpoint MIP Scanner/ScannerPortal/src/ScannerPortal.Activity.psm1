@@ -9,6 +9,9 @@
 Tracking ID: 7ca3cb69-908e-4b98-a49e-f1ac08d422d8
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: ScannerPortal/src/ScannerPortal.Activity.psm1.
+.NOTES
 HISTORY
 Script      : ScannerPortal/src/ScannerPortal.Activity.psm1
 Version     : 1.1.0

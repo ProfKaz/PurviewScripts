@@ -9,6 +9,9 @@
 Tracking ID: fc9c18ec-8592-4726-8383-5b41b835eb49
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: labs/MipSdkAudit/New-MipSdkAuditApp.ps1.
+.NOTES
 HISTORY
 Script      : labs/MipSdkAudit/New-MipSdkAuditApp.ps1
 Version     : 1.1.0

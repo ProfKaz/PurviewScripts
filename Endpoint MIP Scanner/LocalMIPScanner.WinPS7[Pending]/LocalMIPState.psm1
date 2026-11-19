@@ -9,6 +9,9 @@
 Tracking ID: f8d358a4-48ca-4b6f-9991-0a8f19b78be3
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: LocalMIPScanner.WinPS7[Pending]/LocalMIPState.psm1.
+.NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS7[Pending]/LocalMIPState.psm1
 Version     : 1.1.0

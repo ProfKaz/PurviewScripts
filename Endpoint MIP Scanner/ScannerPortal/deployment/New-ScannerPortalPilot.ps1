@@ -9,6 +9,9 @@
 Tracking ID: 1f5569d4-deb5-44b3-8fca-307cc31b2746
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: ScannerPortal/deployment/New-ScannerPortalPilot.ps1.
+.NOTES
 HISTORY
 Script      : ScannerPortal/deployment/New-ScannerPortalPilot.ps1
 Version     : 1.1.0

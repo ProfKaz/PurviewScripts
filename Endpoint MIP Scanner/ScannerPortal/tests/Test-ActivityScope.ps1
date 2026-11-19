@@ -9,6 +9,9 @@
 Tracking ID: 26c94860-73b6-4a9e-adcc-983d4891db94
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: ScannerPortal/tests/Test-ActivityScope.ps1.
+.NOTES
 HISTORY
 Script      : ScannerPortal/tests/Test-ActivityScope.ps1
 Version     : 1.1.0

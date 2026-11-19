@@ -9,6 +9,9 @@
 Tracking ID: 59cbe0d4-0a16-4109-8764-9c53ee580e54
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: LocalMIPScanner.WinPS51/tests/Measure-Inventory.ps1.
+.NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS51/tests/Measure-Inventory.ps1
 Version     : 1.1.0

@@ -9,6 +9,9 @@
 Tracking ID: aca05f79-4413-4d97-ae17-7221db70b83f
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: LocalMIPScanner.WinPS7[Pending]/LocalMIPContentAudit.ps1.
+.NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS7[Pending]/LocalMIPContentAudit.ps1
 Version     : 1.1.0

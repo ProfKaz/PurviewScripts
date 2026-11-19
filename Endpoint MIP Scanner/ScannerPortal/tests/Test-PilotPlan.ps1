@@ -9,6 +9,9 @@
 Tracking ID: 7082c996-0b8b-4c1b-a258-a54e41792795
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: ScannerPortal/tests/Test-PilotPlan.ps1.
+.NOTES
 HISTORY
 Script      : ScannerPortal/tests/Test-PilotPlan.ps1
 Version     : 1.1.0

@@ -9,6 +9,9 @@
 Tracking ID: b25c7e57-7ee6-4a1d-9ef4-3c35bbaa6e20
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: LocalMIPScanner.WinPS7[Pending]/Measure-LocalMIPScanner.ps1.
+.NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS7[Pending]/Measure-LocalMIPScanner.ps1
 Version     : 1.1.0

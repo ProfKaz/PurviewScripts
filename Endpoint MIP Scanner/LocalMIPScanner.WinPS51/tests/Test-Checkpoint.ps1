@@ -9,6 +9,9 @@
 Tracking ID: fa340e23-8e25-4457-958a-e2ff3f59a8cb
 #>
 <#
+.DESCRIPTION
+Endpoint MIP Scanner component: LocalMIPScanner.WinPS51/tests/Test-Checkpoint.ps1.
+.NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS51/tests/Test-Checkpoint.ps1
 Version     : 1.1.0
