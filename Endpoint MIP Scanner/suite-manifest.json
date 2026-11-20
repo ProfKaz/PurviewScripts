@@ -283,6 +283,16 @@
       "Path": "ScannerPortal/tests/Test-ControlPlane.ps1",
       "Version": "1.0.0",
       "TrackingId": "b5cacb4d-11bb-40e3-b8a1-b8f2d8e1ced"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Get-WorkUploadInventory.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "f5c2c163-91ab-4533-b08e-54ad82746fc5"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkUploadInventory.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "a84b3dbb-abce-40da-9fbf-c398f59568e8"
     }
   ],
   "Dependencies": [
