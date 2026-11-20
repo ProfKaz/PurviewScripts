@@ -333,6 +333,16 @@
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkSharePointLibraryGrant.ps1",
       "Version": "0.1.0",
       "TrackingId": "215e99b9-9f1e-49a5-90ad-a4073ab0b378"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Get-WorkLibraryAcl.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "0939436e-815a-4b44-a73c-f3d5d7e5f34"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkLibraryAcl.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "5d60e962-a7e4-47be-839b-c61b96789a75"
     }
   ],
   "Dependencies": [

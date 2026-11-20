@@ -28,7 +28,8 @@ No distribuir todavía un PFX ni crear certificados nuevos. Primero comprobar lo
 | W03B | Conceder write seleccionado sobre la biblioteca identificada y verificar por lectura | Script implementado; tenant pendiente |
 | W03C | Leer metadatos del destino con el certificado y comprobar denegación en Config | Implementado como TestAccess; tenant pendiente |
 | W04 | Crear carpeta de piloto y subir marcador sintético; descargar/verificar SHA-256 | Implementado como UploadProbe; tenant pendiente |
-| W05 | Verificar y subir una copia del lote real existente, manifiesto al final y reintento | Pendiente |
+| W05A | Revisar configuración ACL de biblioteca y padre work-pilot | Script implementado; tenant pendiente |
+| W05B–W05D | Validar usuario sin privilegios, verificar payloads y subir copia del lote real | Pendientes de la revisión |
 | W06 | Repetición, desconexión, otra estación, rendimiento y rotación/revocación | Pendiente |
 
 La estructura candidata para W04/W05 es biblioteca/work-pilot/devices/registrationId/batches/batchId. Si no existe un registro persistido del equipo, se definirá uno antes de subir; el nombre del equipo será metadato, no una identidad autenticada por sí solo. Un principal compartido no autentica criptográficamente al equipo que declara ese identificador.
@@ -182,3 +183,26 @@ La descarga usa el URL preautenticado obtenido de Graph, sin enviarle el bearer 
 Compartir WORK W04 PARA COMPARTIR. Outcome=Verified, DownloadHashVerified=true y hashes iguales son los criterios. MarkerUploadedThisRun es true solo si la escritura se confirmó en ese intento; puede ser false en una recuperación verificada. RealBatchRead=false y RealBatchUploaded=false siguen siendo obligatorios. MarkerWebUrl permite revisar el marcador desde el navegador con acceso normal autorizado. Esto no prueba ACL de usuarios ni custodia central; antes de W05 real sigue pendiente esa revisión.
 
 La prueba local usa un certificado real temporal con HTTP simulado: primera carga y descarga, pérdida de respuesta después de escribir, repetición sin duplicados, archivo ocupando una ruta de carpeta, descarga corrupta y falta de bearer en el cliente de descarga. No se subió ningún archivo real al tenant por parte del agente. Referencias: [conflictBehavior en URL](https://learn.microsoft.com/en-us/graph/api/resources/driveitem?view=graph-rest-1.0), [descargas preautenticadas sin Authorization](https://learn.microsoft.com/en-us/graph/api/driveitem-get-content?view=graph-rest-1.0).
+
+### W04 y repetición recibidos; siguiente W05A
+
+El usuario confirmó la carga/descarga de un marcador de 244 bytes con SHA-256 idéntico. Confirmó después repetición con el mismo ProbeId, MarkerItemId y hash: MarkerUploadedThisRun=false y FoldersCreatedThisRun=0. El lote real permanece sin leer/subir en esta pista.
+
+Get-WorkLibraryAcl.ps1 revisa solo la configuración de permisos antes de usar evidencia real. Se ejecuta en el PS7 portátil con PnP.PowerShell 3.2.0, usando la aplicación Setup existente y login delegado interactivo; no usa el certificado del publicador. Si falta PnP lo instala para CurrentUser. La aplicación Setup ya declara AllSites.FullControl delegado; disponer de un token capaz de escribir no implica que este script lo haga: solo llama Get-PnPWeb, Get-PnPSiteCollectionAdmin, Get-PnPList, Get-PnPFolder, Get-PnPProperty y Get-PnPGroupMember, además de conexión/desconexión. No hay cambios de ACL, aplicaciones, certificados, carpetas o archivos.
+
+Revisa HasUniqueRoleAssignments y asignaciones de ScannerPortalLanding. Expande grupos SharePoint para clasificar miembros frente a administradores configurados de la colección de sitios. El publicador esperado se identifica por su claim de aplicación. Limited Access se reconoce por RoleType.Guest=1, sin depender del idioma del nombre. Grupos Entra anidados, otras apps, usuarios no administradores y principales desconocidos requieren revisión; errores al leer miembros no se convierten en grupos vacíos seguros. También revisa la carpeta existente work-pilot: si tiene permisos propios se clasifican, y si hereda su padre directo es la biblioteca revisada.
+
+```powershell
+& $adminPS -NoProfile -File '.\Get-WorkLibraryAcl.ps1' `
+    -TenantId 'd88f1561-bdab-46f0-b8ba-bfca21e1b5c4' `
+    -SiteUrl 'https://mhcybersecuritydemos.sharepoint.com/sites/ScannerPortalPilot' `
+    -PortalClientId 'f95bae44-e6ee-4673-a5e2-8fc1fb08cd64' `
+    -PublisherClientId '4ce79552-fbef-4b87-a9b9-abd07e5f2dca' `
+    -ListId '0e82d3f5-3357-4f05-b604-049e13fb9491'
+```
+
+Compartir WORK W05A PARA COMPARTIR. ConfigurationReviewed significa que los ámbitos observados tienen administradores y el publicador esperado, grupos SharePoint solo de administradores o vacíos en ese instante, y la biblioteca no hereda permisos sin revisar. NeedsReview/Partial obliga a revisar los detalles, sin cambiar permisos automáticamente. No equivale a probar otra cuenta ni a revisar todos los subelementos: OrdinaryUserEffectiveAccessTested=false, DescendantUniquePermissionsReviewed=false y FutureTargetFolderAclReviewed=false son intencionales. La revisión del padre no acredita automáticamente permisos de carpetas preexistentes más profundas; la ruta concreta de recepción real también debe validarse.
+
+Los administradores configurados conservan acceso. Esta prueba no resuelve grupos Entra ni garantiza membresías futuras, protección contra propietarios de la clave compartida o inmutabilidad de Landing. Una prueba con usuario distinto y la revisión del destino específico preceden al lote real.
+
+Test-WorkLibraryAcl pasó con PnP simulado: administradores/publicador, Limited Access localizado, grupo Entra no resuelto, fallo de lectura de grupo, biblioteca heredada y excepción de permisos en el padre. No hubo consulta del tenant por el agente. Referencias: [Get-PnPList](https://pnp.github.io/powershell/cmdlets/Get-PnPList.html), [Get-PnPSiteCollectionAdmin](https://pnp.github.io/powershell/cmdlets/Get-PnPSiteCollectionAdmin.html), [Get-PnPGroupMember](https://pnp.github.io/powershell/cmdlets/Get-PnPGroupMember.html).
