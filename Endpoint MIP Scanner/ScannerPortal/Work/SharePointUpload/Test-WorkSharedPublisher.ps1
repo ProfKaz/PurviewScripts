@@ -1,16 +1,17 @@
 ﻿<#PSScriptInfo
-.VERSION 0.1.0
+.VERSION 0.2.0
 .GUID 382fa9db-fd14-4903-b3c6-19bf35d4be2a
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-20 0.2.0 App-only library/root reads, control denial and failure-boundary tests.
 2026-11-20 0.1.0 Real single-certificate lifecycle and signed assertion with mocked directory/token transport.
 #>
 <#
 .DESCRIPTION
 Offline shared publisher tests. Uses a temporary CurrentUser certificate; no tenant or SharePoint calls.
 .NOTES
-Version     : 0.1.0
+Version     : 0.2.0
 Tracking ID : 382fa9db-fd14-4903-b3c6-19bf35d4be2a
 #>
 #Requires -Version 7.4
@@ -20,6 +21,11 @@ $fixture=Join-Path $env:TEMP ('WorkSharedPublisher-'+[guid]::NewGuid().ToString(
 $global:SharedWorkFixture=@{Tenant=[guid]::NewGuid().ToString();Client=[guid]::NewGuid().ToString();AppId=[guid]::NewGuid().ToString()
     Principal=[guid]::NewGuid().ToString();GraphId=[guid]::NewGuid().ToString();Role=[guid]::NewGuid().ToString()
     App=$null;Sp=$null;Grants=@();AppCreates=0;KeyWrites=0;Connects=0;Tokens=0;Directory=$fixture}
+$global:SharedWorkFixture.ListId=[guid]::NewGuid().ToString()
+$global:SharedWorkFixture.ControlListId=[guid]::NewGuid().ToString()
+$global:SharedWorkFixture.SiteId='example.sharepoint.com,'+[guid]::NewGuid().ToString()+','+[guid]::NewGuid().ToString()
+$global:SharedWorkFixture.NegativeStatus=403
+$global:SharedWorkFixture.RootUrl='https://example.sharepoint.com/sites/Pilot/ScannerPortalLanding'
 function Get-Module{param($Name,[switch]$ListAvailable) [pscustomobject]@{Name='Microsoft.Graph.Authentication'}}
 function Import-Module{param($Name)}
 function Connect-MgGraph{param($TenantId,$Scopes,$ContextScope,[switch]$NoWelcome)
@@ -65,8 +71,21 @@ function Decode-SharedPart([string]$Part){
     $value=$Part.Replace('-','+').Replace('_','/')
     [Convert]::FromBase64String($value.PadRight($value.Length+((4-$value.Length%4)%4),'='))
 }
-function Invoke-RestMethod{param($Uri,$Method,$ContentType,$Body)
-    $f=$global:SharedWorkFixture;$f.Tokens++
+function Invoke-RestMethod{param($Uri,$Method,$ContentType,$Body,$Headers)
+    $f=$global:SharedWorkFixture
+    if($Method -eq 'GET'){
+        if($Headers.Authorization -ne 'Bearer DO-NOT-SHARE-TOKEN' -or -not $Uri.StartsWith('https://graph.microsoft.com/v1.0/')){throw 'Unexpected resource authentication/host.'}
+        if($Uri.Contains('/root?')){return @{id='root-item';folder=@{};webUrl=$f.RootUrl;sharepointIds=@{listId=$f.ListId}}}
+        if($Uri.Contains($f.ControlListId)){
+            if($f.NegativeStatus -eq 200){return @{id=$f.ControlListId}}
+            $e=[Exception]::new('fixture resource failure')
+            if($f.NegativeStatus){$e|Add-Member ResponseStatusCode $f.NegativeStatus}
+            throw $e
+        }
+        if($Uri.Contains($f.ListId)){return @{id=$f.ListId;displayName='ScannerPortalLanding';list=@{template='documentLibrary'};webUrl='https://example.sharepoint.com/sites/Pilot/ScannerPortalLanding'}}
+        throw 'Unexpected resource URI.'
+    }
+    $f.Tokens++
     if($Method -ne 'POST' -or $Body.grant_type -ne 'client_credentials' -or $Body.scope -ne 'https://graph.microsoft.com/.default'){throw 'Invalid token exchange.'}
     $parts=$Body.client_assertion.Split('.')
     $claims=[Text.Encoding]::UTF8.GetString((Decode-SharedPart $parts[1]))|ConvertFrom-Json
@@ -96,10 +115,24 @@ try{
     Assert ($auth.Outcome -eq 'TokenAcquired' -and $global:SharedWorkFixture.Tokens -eq 1 -and $global:SharedWorkFixture.Connects -eq 2) 'Authenticate used administrative sign-in or failed app-only authentication.'
     Assert (-not(($auth|ConvertTo-Json).Contains('DO-NOT-SHARE'))) 'Token leaked.'
     Assert (-not $auth.SharePointAccessTested -and $auth.FilesUploaded -eq 0) 'Authentication falsely claimed upload access.'
+    $access=@{Step='TestAccess';TenantId=$global:SharedWorkFixture.Tenant;StateDirectory=$fixture
+        SiteId=$global:SharedWorkFixture.SiteId;ListId=$global:SharedWorkFixture.ListId;DriveId='drive-fixture';ControlListId=$global:SharedWorkFixture.ControlListId}
+    $probe=& $scriptPath @access
+    Assert ($probe.LibraryReadVerified -and $probe.DriveRootReadVerified -and $probe.ControlReadDenied -and $probe.ControlStatusCode -eq 403 -and -not $probe.WriteAccessTested -and $global:SharedWorkFixture.Connects -eq 2) 'App-only access probe failed or claimed write/admin verification.'
+    $global:SharedWorkFixture.NegativeStatus=404;$probe=& $scriptPath @access
+    Assert ($probe.ControlStatusCode -eq 404 -and -not $probe.ControlExistenceVerifiedByThisScript) '404 probe falsely claimed control existence verification.'
+    foreach($status in 200,401,500,0){
+        $global:SharedWorkFixture.NegativeStatus=$status
+        $rejected=$false;try{& $scriptPath @access|Out-Null}catch{$rejected=$true}
+        Assert $rejected 'Unexpected control success/authentication/server/network failure was counted as isolation.'
+    }
+    $global:SharedWorkFixture.NegativeStatus=403;$global:SharedWorkFixture.RootUrl='https://example.sharepoint.com/sites/Pilot/OtherLibrary'
+    $rejected=$false;try{& $scriptPath @access|Out-Null}catch{$rejected=$true}
+    Assert $rejected 'Wrong drive root accepted.'
     $global:SharedWorkFixture.Grants+=@{resourceId=[guid]::NewGuid().ToString();appRoleId=[guid]::NewGuid().ToString()}
     $rejected=$false;try{& $scriptPath -Step Prepare -TenantId $global:SharedWorkFixture.Tenant -StateDirectory $fixture|Out-Null}catch{$rejected=$true}
     Assert ($rejected -and $global:SharedWorkFixture.KeyWrites -eq 1) 'Unexpected effective permissions were not rejected before credential update.'
-    'PASS: real single CurrentUser certificate reuse, unique app/key/consent, RSA assertion, separate app-only token path and excessive-grant rejection (mock directory/token HTTP)'
+    'PASS: real certificate reuse/RSA; single app/key/consent; app-only list/root reads; 403/404 control denial; rejection of control success, 401/500/network and wrong root (mock HTTP)'
 }finally{
     $statePath=Join-Path $fixture 'publisher.json'
     if(Test-Path -LiteralPath $statePath){$state=Get-Content -LiteralPath $statePath -Raw|ConvertFrom-Json;if($state.certificateThumbprint){Remove-Item -LiteralPath ('Cert:\CurrentUser\My\'+$state.certificateThumbprint) -DeleteKey -Force}}

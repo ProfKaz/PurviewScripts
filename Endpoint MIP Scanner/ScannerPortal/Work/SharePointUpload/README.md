@@ -26,7 +26,7 @@ No distribuir todavía un PFX ni crear certificados nuevos. Primero comprobar lo
 | W02B | Obtener un token con la identidad de carga elegida; sin crear carpetas ni cargar archivos | Pendiente de revisar W02A y decidir ubicación de credencial |
 | W03A | Resolver sitio/biblioteca e inspeccionar grants de aplicación, solo lectura administrativa | Script implementado; tenant pendiente |
 | W03B | Conceder write seleccionado sobre la biblioteca identificada y verificar por lectura | Script implementado; tenant pendiente |
-| W03C | Comprobar acceso efectivo al destino con el certificado de la app | Pendiente de W03B |
+| W03C | Leer metadatos del destino con el certificado y comprobar denegación en Config | Implementado como TestAccess; tenant pendiente |
 | W04 | Crear una carpeta de piloto y subir un marcador sintético; descargar/verificar hash | Pendiente |
 | W05 | Verificar y subir una copia del lote real existente, manifiesto al final y reintento | Pendiente |
 | W06 | Repetición, desconexión, otra estación, rendimiento y rotación/revocación | Pendiente |
@@ -136,3 +136,24 @@ La sesión administrativa pide Application.Read.All y Sites.ReadWrite.All al apl
 Compartir WORK W03B PARA COMPARTIR. Outcome=Verified y GrantReadBackVerified=true confirman la concesión administrativa. PublisherEffectiveAccessTested=false es intencional: la siguiente W03C usará el certificado. W04 escribe un marcador sintético; antes de W05 con evidencia real se debe revisar acceso efectivo de usuarios, herencia y alcance compartido. La concesión de una app es una modificación de seguridad del recurso; este script no demuestra el aislamiento de usuarios ni verifica todas las concesiones heredadas o por carpeta.
 
 Test-WorkSharePointLibraryGrant pasó con Graph simulado: Plan sin escritura, payload de write exacto a la única biblioteca, lectura posterior, repetición sin duplicado y rechazo de otra app, otra biblioteca o rol inesperado. No se concedió acceso real por parte del agente. [API y permiso delegado mínimo para crear la concesión](https://learn.microsoft.com/en-us/graph/api/list-post-permissions?view=graph-rest-1.0).
+
+### W03B recibido y siguiente W03C
+
+El usuario confirmó Outcome=Verified, GrantedRole=write y GrantReadBackVerified=true. El grant se creó en ScannerPortalLanding para la aplicación Work, sin certificados nuevos ni archivos subidos. Esto confirma la concesión por vía administrativa, no el acceso efectivo por certificado.
+
+Invoke-WorkSharedPublisher.ps1 versión 0.2.0 añade Step=TestAccess. Reutiliza el certificado/estado y obtiene un token client_credentials nuevo, sin importar Graph.Authentication ni iniciar login administrativo en esta ruta. Con ese token realiza solo GET de metadatos: lista Landing por IDs conocidos y raíz del drive. Valida el nombre/tipo/URL de biblioteca y la correspondencia con la raíz; no enumera contenidos ni descarga archivos.
+
+Luego intenta leer metadatos de ScannerPortalConfig, cuyo ListId y existencia ya se verificaron en W03A por el usuario. Debe recibir 403 o 404. Un 200 es acceso inesperado y detiene la prueba; 401, fallos de red y 5xx no se contabilizan como denegación correcta. El script no acredita por sí mismo que un ID arbitrario exista: el control debe ser el recurso conocido de W03A. El resultado es una comprobación específica de lectura y denegación, no prueba de aislamiento global ni de escritura. No hay fallback a identidad administrativa.
+
+```powershell
+& $adminPS -NoProfile -File '.\Invoke-WorkSharedPublisher.ps1' `
+    -Step TestAccess -TenantId 'd88f1561-bdab-46f0-b8ba-bfca21e1b5c4' `
+    -SiteId 'mhcybersecuritydemos.sharepoint.com,0db65add-dc82-47f0-89a1-7a4818ee9a75,d194e373-f508-463a-8c6c-a40120c689a2' `
+    -ListId '0e82d3f5-3357-4f05-b604-049e13fb9491' `
+    -DriveId 'b!3Vq2DYLc8EeJoXpIGO6adXPjlNEI9TpGjGykASDGiaL104IOVzMFT7YEBJ4T-5SR' `
+    -ControlListId '55f058e7-5798-42b9-9bbb-e0d8edf78a7f'
+```
+
+Compartir WORK W02B PARA COMPARTIR con Test=W03C-CertificateLibraryAccess. Outcome=Verified, LibraryReadVerified=true, DriveRootReadVerified=true y ControlReadDenied=true son los criterios. WriteAccessTested=false, OrdinaryUserAclReviewed=false y FilesUploaded=0 siguen siendo intencionales; la escritura se probará con un marcador sintético en W04.
+
+El test actualizado usa un certificado real temporal y transportes simulados. Verifica ambas lecturas app-only, denegación 403/404 y rechazo de 200/401/500/fallo de red y de una raíz de otra biblioteca, sin conexión administrativa para esta ruta. No se hicieron llamadas al tenant por parte del agente. [Los permisos seleccionados se aplican al recurso independientemente de usar rutas sites/lists o drives/items](https://learn.microsoft.com/en-us/graph/permissions-selected-overview).

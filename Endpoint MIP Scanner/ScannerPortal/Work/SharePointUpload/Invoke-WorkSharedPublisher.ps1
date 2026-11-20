@@ -1,27 +1,37 @@
 ﻿<#PSScriptInfo
-.VERSION 0.1.0
+.VERSION 0.2.0
 .GUID 93b41e48-1698-483c-9a57-986b9b387239
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-20 0.2.0 W03C app-only metadata reads and denied access to a known ungranted list.
 2026-11-20 0.1.0 W02B single pilot certificate/app preparation and separate app-only token test.
 #>
 <#
 .DESCRIPTION
 Standalone shared publisher pilot. Prepare changes only a dedicated Entra app/SP and a single CurrentUser certificate. Authenticate performs only token acquisition.
 .NOTES
-Version     : 0.1.0
+Version     : 0.2.0
 Tracking ID : 93b41e48-1698-483c-9a57-986b9b387239
 #>
 #Requires -Version 7.4
 [CmdletBinding()]
 param([Parameter(Mandatory)][guid]$TenantId,
-    [ValidateSet('Prepare','Authenticate')][string]$Step='Authenticate',
+    [ValidateSet('Prepare','Authenticate','TestAccess')][string]$Step='Authenticate',
     [string]$StateDirectory=(Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner/Work/SharedPublisher'),
     [guid]$ClientId=[guid]::Empty,
-    [switch]$AllowCertificateExport)
+    [switch]$AllowCertificateExport,
+    [string]$SiteId,[guid]$ListId=[guid]::Empty,[string]$DriveId,
+    [guid]$ControlListId=[guid]::Empty)
 $ErrorActionPreference='Stop'
 if($TenantId -eq [guid]::Empty){throw 'Specify a tenant GUID.'}
+if($Step -eq 'TestAccess'){
+    $siteParts=$SiteId.Split(',')
+    if($siteParts.Count -ne 3 -or $siteParts[0] -notmatch '^[a-z0-9-]+\.sharepoint\.com$' -or
+        [guid]$siteParts[1] -eq [guid]::Empty -or [guid]$siteParts[2] -eq [guid]::Empty -or
+        $ListId -eq [guid]::Empty -or $ControlListId -eq [guid]::Empty -or $ControlListId -eq $ListId -or
+        $DriveId -notmatch '^[A-Za-z0-9_!.,-]{1,256}$'){throw 'TestAccess requires validated site/list/drive IDs and a different known-existing control list.'}
+}
 $StateDirectory=[IO.Path]::GetFullPath($StateDirectory)
 for($parent=[IO.DirectoryInfo]::new($StateDirectory);$parent;$parent=$parent.Parent){
     if($parent.Exists -and ($parent.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Reparse state directory.'}
@@ -139,6 +149,35 @@ try{
             $result=[ordered]@{Test='W02B2-CertificateAuthentication';Outcome='TokenAcquired';Authentication='CertificateAppOnly'
                 TenantId=$TenantId.ToString();ClientId=$ClientId.ToString();CertificateThumbprint=$cert.Thumbprint
                 TokenReturnedToConsole=$false;ExpiresInSeconds=$response.expires_in;SharePointAccessTested=$false;FilesUploaded=0}
+            if($Step -eq 'TestAccess'){
+                $headers=@{Authorization='Bearer '+$response.access_token}
+                try{
+                    $list=Invoke-RestMethod -Uri ("https://graph.microsoft.com/v1.0/sites/$SiteId/lists/$ListId"+'?$select=id,displayName,webUrl,list') -Method GET -Headers $headers
+                    if([guid]$list.id -ne $ListId -or $list.displayName -ne 'ScannerPortalLanding' -or $list.list.template -ne 'documentLibrary'){throw 'Unexpected list metadata.'}
+                    $listUrl=[uri]$list.webUrl
+                    if($listUrl.Scheme -ne 'https' -or $listUrl.Host -ne $siteParts[0] -or $listUrl.AbsolutePath -notmatch '^/sites/[A-Za-z0-9_-]+/ScannerPortalLanding/?$' -or $listUrl.UserInfo -or $listUrl.Query -or $listUrl.Fragment -or -not $listUrl.IsDefaultPort){throw 'Unexpected library URL.'}
+                    $root=Invoke-RestMethod -Uri ("https://graph.microsoft.com/v1.0/drives/$DriveId/root"+'?$select=id,webUrl,folder,sharepointIds') -Method GET -Headers $headers
+                    if(-not $root.id -or $null -eq $root.folder -or ([string]$root.webUrl).TrimEnd('/') -ne $list.webUrl.TrimEnd('/')){throw 'Drive root does not match expected library.'}
+                    if($root.sharepointIds.listId -and [guid]$root.sharepointIds.listId -ne $ListId){throw 'Drive root identifies another list.'}
+                    $denied=$false;$negativeStatus=$null
+                    try{
+                        $null=Invoke-RestMethod -Uri ("https://graph.microsoft.com/v1.0/sites/$SiteId/lists/$ControlListId"+'?$select=id,displayName') -Method GET -Headers $headers
+                    }catch{
+                        if($_.Exception.PSObject.Properties['ResponseStatusCode']){$negativeStatus=[int]$_.Exception.ResponseStatusCode}
+                        elseif($_.Exception.PSObject.Properties['Response'] -and $_.Exception.Response){$negativeStatus=[int]$_.Exception.Response.StatusCode}
+                        if($negativeStatus -notin 403,404){throw}
+                        $denied=$true
+                    }
+                    if(-not $denied){throw 'Publisher can read the ungranted control list; review resource grants.'}
+                    $result=[ordered]@{Test='W03C-CertificateLibraryAccess';Outcome='Verified';Authentication='CertificateAppOnly'
+                        TenantId=$TenantId.ToString();ClientId=$ClientId.ToString();CertificateThumbprint=$cert.Thumbprint
+                        SiteId=$SiteId;ListId=$ListId.ToString();DriveId=$DriveId;RootItemId=$root.id
+                        LibraryUrl=$list.webUrl;LibraryReadVerified=$true;DriveRootReadVerified=$true
+                        ControlListId=$ControlListId.ToString();ControlReadDenied=$denied;ControlStatusCode=$negativeStatus
+                        ControlExistenceVerifiedByThisScript=$false;WriteAccessTested=$false;OrdinaryUserAclReviewed=$false
+                        AdministrativeLoginUsed=$false;TokenReturnedToConsole=$false;SharePointChanged=$false;CertificatesCreated=0;FilesUploaded=0}
+                }finally{$headers.Clear()}
+            }
         }finally{$form.Clear();$assertion=$null;$response=$null}
     }
     Write-Host '=== WORK W02B PARA COMPARTIR ===' -ForegroundColor Magenta

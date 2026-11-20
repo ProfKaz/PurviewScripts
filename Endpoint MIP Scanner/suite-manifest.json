@@ -306,12 +306,12 @@
     },
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Invoke-WorkSharedPublisher.ps1",
-      "Version": "0.1.0",
+      "Version": "0.2.0",
       "TrackingId": "93b41e48-1698-483c-9a57-986b9b387239"
     },
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkSharedPublisher.ps1",
-      "Version": "0.1.0",
+      "Version": "0.2.0",
       "TrackingId": "382fa9db-fd14-4903-b3c6-19bf35d4be2a"
     },
     {
