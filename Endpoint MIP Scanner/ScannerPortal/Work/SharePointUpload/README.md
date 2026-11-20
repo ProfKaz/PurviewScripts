@@ -24,7 +24,8 @@ No distribuir todavía un PFX ni crear certificados nuevos. Primero comprobar lo
 | W01 | Inventario local: IDs públicos guardados, certificados existentes del scanner y lotes pendientes | Script implementado; sin acceso de red |
 | W02A | Consultar aplicaciones y permisos existentes en Entra con acceso administrativo de lectura | Script implementado; validación del tenant pendiente |
 | W02B | Obtener un token con la identidad de carga elegida; sin crear carpetas ni cargar archivos | Pendiente de revisar W02A y decidir ubicación de credencial |
-| W03 | Resolver sitio/biblioteca existentes y comprobar permisos | Pendiente |
+| W03A | Resolver sitio/biblioteca e inspeccionar grants de aplicación, solo lectura administrativa | Script implementado; tenant pendiente |
+| W03B | Conceder acceso seleccionado al destino revisado y comprobarlo con la app | Pendiente de W03A |
 | W04 | Crear una carpeta de piloto y subir un marcador sintético; descargar/verificar hash | Pendiente |
 | W05 | Verificar y subir una copia del lote real existente, manifiesto al final y reintento | Pendiente |
 | W06 | Repetición, desconexión, otra estación, rendimiento y rotación/revocación | Pendiente |
@@ -95,3 +96,22 @@ Para el piloto de certificado único reutilizable, AllowCertificateExport permit
 Compartir WORK W02B PARA COMPARTIR con Test=W02B1-SharedPublisherPrepare. Todavía no se otorga permiso a biblioteca/carpeta: el consentimiento Selected por sí solo no autoriza acceso a contenido. Ni Prepare ni Authenticate acceden al lote existente, instalan el portal o cambian tareas. No ejecutar otro enrolamiento por estación.
 
 La prueba local Test-WorkSharedPublisher usa un certificado CurrentUser real con opción exportable explícita y transportes Graph/token simulados. Comprueba repetición sin duplicados, solo certificado público enviado, firma RSA verificable, autenticación separada de administración, salida sin token y rechazo de permisos inesperados antes de actualizar credenciales. No sustituye Prepare/Authenticate reales del tenant.
+
+### W02B validado por el usuario y siguiente W03A
+
+El usuario confirmó Prepare y luego TokenAcquired con CertificateAppOnly, 3599 segundos de validez, sin devolver el token ni subir archivos. Esto valida la autenticación del publicador; no demuestra permisos sobre una biblioteca.
+
+Get-WorkSharePointTarget.ps1 es autónomo para PS7 administrativo. Solicita Sites.Read.All delegado y solo usa GET. Resuelve el sitio por URL, lista bibliotecas incluyendo la faceta system para no omitir recursos ocultos, selecciona ScannerPortalLanding por nombre exacto y obtiene ListId/DriveId. Inspecciona las concesiones a la app únicamente en esa biblioteca. No crea biblioteca/carpeta, no usa la clave privada del publicador, no concede permisos y no abre el lote ni archivos de contenido.
+
+```powershell
+& $adminPS -NoProfile -File '.\Get-WorkSharePointTarget.ps1' `
+    -TenantId 'd88f1561-bdab-46f0-b8ba-bfca21e1b5c4' `
+    -SiteUrl 'https://mhcybersecuritydemos.sharepoint.com/sites/ScannerPortalPilot' `
+    -PublisherClientId '4ce79552-fbef-4b87-a9b9-abd07e5f2dca'
+```
+
+Compartir WORK W03A PARA COMPARTIR. Outcome=Inspected y LibraryFound=true identifican el destino, no prueban escritura del publicador. PublisherGrantsAtLibrary vacío es válido: todavía no se otorgó acceso al recurso en esta pista. Una consulta de permisos fallida genera Partial e Issues, nunca se presenta como inspección completa sin grants. OrdinaryUserAclReviewed=false recuerda que Hidden no demuestra aislamiento de usuarios; los grants de aplicación no equivalen a revisar ACL efectivas de usuarios ni herencia. Una biblioteca ausente devuelve LibraryNotFound y las alternativas existentes sin crear nada.
+
+Test-WorkSharePointTarget prueba con Graph simulado el alcance de lectura, consultas GET, inclusión de recursos ocultos, resolución de ListId/DriveId, grants presentes/ausentes, denegación parcial y biblioteca ausente. Se ejecutó análisis sintáctico y catálogo de scripts; no se consultó SharePoint real por parte del agente.
+
+Fuentes: [enumeración y faceta system](https://learn.microsoft.com/en-us/graph/api/list-list?view=graph-rest-1.0), [lectura de permisos de lista](https://learn.microsoft.com/en-us/graph/api/list-list-permissions?view=graph-rest-1.0), [consentimiento Selected y grant de recurso](https://learn.microsoft.com/en-us/graph/permissions-selected-overview).

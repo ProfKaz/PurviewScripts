@@ -313,6 +313,16 @@
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkSharedPublisher.ps1",
       "Version": "0.1.0",
       "TrackingId": "382fa9db-fd14-4903-b3c6-19bf35d4be2a"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Get-WorkSharePointTarget.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "e6dd1c57-b33f-44bf-8f5d-42073dad8f3a"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkSharePointTarget.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "e6978500-1f7b-4c96-94a4-d0e91186fc7b"
     }
   ],
   "Dependencies": [
