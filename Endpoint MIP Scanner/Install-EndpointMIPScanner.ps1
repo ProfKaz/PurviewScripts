@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.2.1
+.VERSION 1.3.0
 
 .GUID 0576cc7a-692e-4876-bfe5-d1fb62a30116
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+2026-11-20  1.3.0  Portal control plane and managed endpoint enrollment stages.
 2026-11-20  1.2.1  CurrentUser publisher credentials without local elevation.
 2026-11-20  1.2.0  Add Publisher stage for an existing portal site.
 2026-11-18  1.1.0  Consolidated Endpoint MIP Scanner layout, shared lab and unified setup.
@@ -23,7 +24,7 @@ Endpoint MIP Scanner component: Install-EndpointMIPScanner.ps1.
 .NOTES
 HISTORY
 Script      : Install-EndpointMIPScanner.ps1
-Version     : 1.2.1
+Version     : 1.3.0
 Tracking ID : 0576cc7a-692e-4876-bfe5-d1fb62a30116
 2026-11-18  Kaz Demos  First tracked suite release; preserves prior milestone implementation.
 #>
@@ -33,16 +34,26 @@ Tracking ID : 0576cc7a-692e-4876-bfe5-d1fb62a30116
 param(
     [ValidatePattern('^[A-Za-z0-9._/-]+$')][string] $Ref = 'main',
     [string] $Destination,
-    [ValidateSet('Download','Local','MipApp','Portal','Publisher','All')][string] $Stage = 'Local',
+    [ValidateSet('Download','Local','MipApp','Portal','Publisher','ControlPlane','ManagedEndpoint','All')][string] $Stage = 'Local',
     [string] $DotNetPath,
     [guid] $TenantId = [guid]::Empty,
     [guid] $MipClientId = [guid]::Empty,
     [guid] $PortalClientId = [guid]::Empty,
     [guid] $PublisherClientId = [guid]::Empty,
+    [guid] $ControlPlaneClientId = [guid]::Empty,
     [string] $AdminUrl,
     [string] $SiteUrl,
     [string] $Owner,
-    [switch] $ResumeFoundation
+    [switch] $ResumeFoundation,
+    [ValidateSet('Initialize','Approve','Publish')][string] $ControlPlaneAction = 'Initialize',
+    [string] $ControlPlaneStateDirectory,
+    [string] $BootstrapPath,
+    [string] $EnrollmentRequest,
+    [string] $ProfilePath,
+    [guid] $RegistrationId = [guid]::Empty,
+    [string] $EndpointDirectory,
+    [switch] $AllowSharedIngress,
+    [switch] $RegisterTask
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -143,7 +154,7 @@ try {
         $_.type -eq 'blob' -and $_.mode -in '100644','100755' -and $_.path.StartsWith($prefix)
     })
     if ($files.Count -eq 0) { throw 'Suite not found in this reference.' }
-    Write-Host "Endpoint MIP Scanner 1.2.1 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
+    Write-Host "Endpoint MIP Scanner 1.3.0 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
     Write-Host "Verifying $($files.Count) suite files in $root"
     $stamp = [guid]::NewGuid().ToString('N')
     $staging = Join-Path $work $stamp
@@ -193,14 +204,14 @@ try {
     }
     Write-SetupJson (Join-Path $work 'files.json') @{ Repository = $repository; Commit = $sha; Files = $manifest.ToArray() }
     $state = [ordered]@{
-        InstallId = $stamp; SuiteVersion = '1.2.1'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
+        InstallId = $stamp; SuiteVersion = '1.3.0'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
         Completed = @(); Status = 'Running'; RestartRequired = $false; VisualCppPackageSha256 = $null
     }
     $state.Completed += 'VerifiedDownload'
     Write-Host "Verified suite. Published $($downloads.Count) changed files."
     Write-SetupJson (Join-Path $work 'status.json') $state
     if ($Stage -ne 'Download') {
-        if ($Stage -ne 'Publisher') {
+        if ($Stage -notin 'Publisher','ControlPlane','ManagedEndpoint') {
         Install-VisualCpp
         $sdkParameters = @{ Ref = $sha; Destination = $root }
         if ($DotNetPath) { $sdkParameters.DotNetPath = $DotNetPath }
@@ -255,6 +266,32 @@ try {
             if ($PublisherClientId -ne [guid]::Empty) { $parameters.PublisherClientId = $PublisherClientId }
             Invoke-ChildScript $pwsh (Join-Path $root 'deployment/Initialize-ScannerPortalPublisher.ps1') $parameters
             $state.Completed += 'PublisherPreflight'
+        }
+        if ($Stage -eq 'ControlPlane') {
+            if ($TenantId -eq [guid]::Empty -or -not $SiteUrl) { throw 'ControlPlane requires TenantId and the existing SiteUrl.' }
+            if (-not $ControlPlaneStateDirectory) { $ControlPlaneStateDirectory = Join-Path $work 'controlplane' }
+            if ($PortalClientId -eq [guid]::Empty -and (Test-Path -LiteralPath (Join-Path $work 'portal-app.json'))) {
+                $savedPortal = Get-Content -LiteralPath (Join-Path $work 'portal-app.json') -Raw -Encoding utf8 | ConvertFrom-Json
+                if ($savedPortal.TenantId -ne $TenantId.ToString()) { throw 'Saved portal app belongs to another tenant.' }
+                $PortalClientId = [guid]$savedPortal.ClientId
+            }
+            $parameters = @{ TenantId=$TenantId; SiteUrl=$SiteUrl; StateDirectory=$ControlPlaneStateDirectory; Action=$ControlPlaneAction; Mode='Apply' }
+            if ($PortalClientId -ne [guid]::Empty) { $parameters.PortalClientId=$PortalClientId }
+            if ($ControlPlaneClientId -ne [guid]::Empty) { $parameters.ClientId=$ControlPlaneClientId }
+            if ($EnrollmentRequest) { $parameters.RequestPath=$EnrollmentRequest }
+            if ($ProfilePath) { $parameters.ProfilePath=$ProfilePath }
+            if ($RegistrationId -ne [guid]::Empty) { $parameters.RegistrationId=$RegistrationId }
+            if ($AllowSharedIngress) { $parameters.AllowSharedIngress=$true }
+            Invoke-ChildScript (Install-AdministrativePowerShell) (Join-Path $root 'ScannerPortal/deployment/Set-ScannerPortalControlPlane.ps1') $parameters
+            $state.Completed += ('ControlPlane-' + $ControlPlaneAction)
+        }
+        if ($Stage -eq 'ManagedEndpoint') {
+            if (-not $BootstrapPath) { throw 'ManagedEndpoint requires BootstrapPath from the portal administrator.' }
+            $parameters = @{ BootstrapPath=$BootstrapPath }
+            if ($EndpointDirectory) { $parameters.Directory=$EndpointDirectory }
+            if ($RegisterTask) { $parameters.RegisterTask=$true }
+            Invoke-ChildScript (Join-Path $PSHOME 'powershell.exe') (Join-Path $root 'ScannerPortal/deployment/Install-ScannerPortalEndpoint.ps1') $parameters
+            $state.Completed += 'ManagedEndpointEnrollment'
         }
     }
     $state.Status = 'Completed'
