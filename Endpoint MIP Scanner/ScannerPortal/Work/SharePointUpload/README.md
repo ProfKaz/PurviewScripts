@@ -1,4 +1,4 @@
-# Work: subida básica a SharePoint
+﻿# Work: subida básica a SharePoint
 
 Rama work/sharepoint-upload-basics, creada desde main después del PR #32. Esta pista no reemplaza las pruebas anteriores del cliente ni continúa el enrolamiento con certificado por equipo. No cambia instaladores, motor, perfiles, tareas o permisos del tenant. El instalador completo del portal queda para después.
 
@@ -206,3 +206,5 @@ Compartir WORK W05A PARA COMPARTIR. ConfigurationReviewed significa que los ámb
 Los administradores configurados conservan acceso. Esta prueba no resuelve grupos Entra ni garantiza membresías futuras, protección contra propietarios de la clave compartida o inmutabilidad de Landing. Una prueba con usuario distinto y la revisión del destino específico preceden al lote real.
 
 Test-WorkLibraryAcl pasó con PnP simulado: administradores/publicador, Limited Access localizado, grupo Entra no resuelto, fallo de lectura de grupo, biblioteca heredada y excepción de permisos en el padre. No hubo consulta del tenant por el agente. Referencias: [Get-PnPList](https://pnp.github.io/powershell/cmdlets/Get-PnPList.html), [Get-PnPSiteCollectionAdmin](https://pnp.github.io/powershell/cmdlets/Get-PnPSiteCollectionAdmin.html), [Get-PnPGroupMember](https://pnp.github.io/powershell/cmdlets/Get-PnPGroupMember.html).
+
+Corrección W05A 0.1.1: la ejecución del usuario detectó que Get-PnPProperty podía emitir RoleDefinitionBindingCollection como un solo objeto. Se separa la carga de RoleAssignments/RoleDefinitionBindings de su enumeración directa. La regresión reproduce la salida no enumerada y verifica que la colección no se trate como un RoleDefinition, incluidos múltiples roles por asignación. Pruebas locales simuladas; la repetición del tenant sigue pendiente. No cambia módulos, permisos ni certificados.

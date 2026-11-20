@@ -1,16 +1,17 @@
 ﻿<#PSScriptInfo
-.VERSION 0.1.0
+.VERSION 0.1.1
 .GUID 5d60e962-a7e4-47be-839b-c61b96789a75
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-20 0.1.1 Reproduce non-enumerated collection output instead of only array fixtures.
 2026-11-20 0.1.0 ACL configuration classification tests with simulated PnP.
 #>
 <#
 .DESCRIPTION
 Offline mocks; no SharePoint login, writes or permission changes.
 .NOTES
-Version     : 0.1.0
+Version     : 0.1.1
 Tracking ID : 5d60e962-a7e4-47be-839b-c61b96789a75
 #>
 #Requires -Version 7.4
@@ -39,12 +40,23 @@ function Get-PnPList{param($Identity,$Includes,$Connection) $global:AclFixture.L
 function Get-PnPFolder{param($Url,$Connection) [pscustomobject]@{Item=$global:AclFixture.Parent}}
 function Get-PnPGroupMember{param($Group,$Connection) if($global:AclFixture.GroupFails){throw 'Membership denied'};$global:AclFixture.Members}
 function Get-PnPProperty{param($ClientObject,[string[]]$Property,$Connection)
+    if($ClientObject -is [Collections.IList] -and ($Property -contains 'Name' -or $Property -contains 'RoleTypeKind')){throw 'A binding collection is not an individual role definition.'}
     if($Property.Count -gt 1){return}
     switch($Property[0]){
         'HasUniqueRoleAssignments'{$ClientObject.Unique}
-        'RoleAssignments'{$ClientObject.Assignments}
+        'RoleAssignments'{
+            $collection=[Collections.Generic.List[object]]::new()
+            foreach($entry in $ClientObject.Assignments){$collection.Add($entry)}
+            $ClientObject|Add-Member RoleAssignments $collection -Force
+            Write-Output -NoEnumerate $collection
+        }
         'Member'{$ClientObject.Member}
-        'RoleDefinitionBindings'{$ClientObject.Roles}
+        'RoleDefinitionBindings'{
+            $collection=[Collections.Generic.List[object]]::new()
+            foreach($entry in $ClientObject.Roles){$collection.Add($entry)}
+            $ClientObject|Add-Member RoleDefinitionBindings $collection -Force
+            Write-Output -NoEnumerate $collection
+        }
         'RootFolder'{$ClientObject.Root}
         'ListItemAllFields'{$ClientObject.Item}
     }
@@ -53,8 +65,16 @@ function Assert($Condition,$Message){if(-not $Condition){throw $Message}}
 $common=@{TenantId=$global:AclFixture.Tenant;PortalClientId=$global:AclFixture.Setup;PublisherClientId=$global:AclFixture.Publisher;ListId=$global:AclFixture.List;SiteUrl='https://example.sharepoint.com/sites/Pilot'}
 $path=Join-Path $PSScriptRoot 'Get-WorkLibraryAcl.ps1'
 try{
+    # Regression fixture: array-wrapping a non-enumerated collection hides the roles.
+    $entry=$global:AclFixture.Library.Assignments[0]
+    $wrapped=@(Get-PnPProperty -ClientObject $entry -Property RoleDefinitionBindings -Connection fixture)
+    Assert ($wrapped.Count -eq 1 -and $wrapped[0] -is [Collections.IList]) 'Fixture did not reproduce the PnP collection boundary.'
+    $oldRejected=$false;try{$null=Get-PnPProperty -ClientObject $wrapped[0] -Property Name,RoleTypeKind -Connection fixture}catch{$oldRejected=$true}
+    Assert $oldRejected 'Previous collection-as-role access was not rejected.'
+    $entry.Roles+= [pscustomobject]@{Name='Read';RoleTypeKind=2}
     $result=& $path @common
     Assert ($result.Outcome -eq 'ConfigurationReviewed' -and -not $result.NeedsReview) 'Expected admin group/publisher classification failed.'
+    Assert ($result.Library.Assignments[0].Roles.Count -eq 2 -and $result.Library.Assignments[0].Roles[0].Name -eq 'Full Control') 'Multiple binding roles were not enumerated individually.'
     Assert ($result.Library.Assignments[2].Classification -eq 'LimitedAccessOnly' -and -not $result.OrdinaryUserEffectiveAccessTested) 'Limited Access or review scope was misrepresented.'
     $global:AclFixture.Members=@([pscustomobject]@{Title='Nested Entra group';LoginName='c:0t.c|tenant|group-guid';PrincipalType='SecurityGroup'})
     $result=& $path @common
@@ -71,5 +91,5 @@ try{
     $global:AclFixture.Parent.Assignments=@([pscustomobject]@{Member=[pscustomobject]@{Title='Other User';LoginName='other@example.invalid';PrincipalType='User'};Roles=@([pscustomobject]@{Name='Read';RoleTypeKind=2})})
     $result=& $path @common
     Assert ($result.NeedsReview -and $result.WorkPilotParent.AssignmentsNeedingReview -eq 1) 'Unique parent-folder user access was missed.'
-    'PASS: read-only ACL review, admin/publisher/Limited Access classification, unresolved group, failed membership, inheritance and parent-folder exception (mock PnP)'
+    'PASS: non-enumerated collection regression, individual/multiple roles, admin/publisher/Limited Access, unresolved/failed membership, inheritance and parent exception (mock PnP)'
 }finally{Remove-Variable AclFixture -Scope Global}

@@ -1,16 +1,17 @@
 ﻿<#PSScriptInfo
-.VERSION 0.1.0
+.VERSION 0.1.1
 .GUID 0939436e-815a-4b44-a73c-f3d5d7e5f34
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-20 0.1.1 Load CSOM collection properties separately, then enumerate their individual objects.
 2026-11-20 0.1.0 Read-only library and work-pilot ACL configuration review before real evidence transfer.
 #>
 <#
 .DESCRIPTION
 Inspects ACL configuration with the existing delegated Setup app. Does not test another user's effective access or modify permissions.
 .NOTES
-Version     : 0.1.0
+Version     : 0.1.1
 Tracking ID : 0939436e-815a-4b44-a73c-f3d5d7e5f34
 #>
 #Requires -Version 7.4
@@ -43,11 +44,14 @@ function Read-WorkAclScope($Object,[string]$Name){
     $unique=[bool](Get-PnPProperty -ClientObject $Object -Property HasUniqueRoleAssignments -Connection $connection)
     $rows=@()
     if($unique){
-        $rows=@(foreach($assignment in (Get-PnPProperty -ClientObject $Object -Property RoleAssignments -Connection $connection)){
+        # Get-PnPProperty may emit an entire CSOM collection as one pipeline object.
+        # Load the property first, then enumerate the collection directly with foreach.
+        $null=Get-PnPProperty -ClientObject $Object -Property RoleAssignments -Connection $connection
+        $rows=@(foreach($assignment in $Object.RoleAssignments){
             $member=Get-PnPProperty -ClientObject $assignment -Property Member -Connection $connection
             $null=Get-PnPProperty -ClientObject $member -Property LoginName,Title,PrincipalType -Connection $connection
-            $bindings=@(Get-PnPProperty -ClientObject $assignment -Property RoleDefinitionBindings -Connection $connection)
-            $roles=@(foreach($role in $bindings){
+            $null=Get-PnPProperty -ClientObject $assignment -Property RoleDefinitionBindings -Connection $connection
+            $roles=@(foreach($role in $assignment.RoleDefinitionBindings){
                 $null=Get-PnPProperty -ClientObject $role -Property Name,RoleTypeKind -Connection $connection
                 [pscustomobject]@{Name=$role.Name;RoleType=[int]$role.RoleTypeKind}
             })
@@ -97,7 +101,7 @@ try{
     $item=Get-PnPProperty -ClientObject $folder -Property ListItemAllFields -Connection $connection
     $parent=Read-WorkAclScope $item 'work-pilot'
     $reviewNeeded=(-not $library.HasUniqueRoleAssignments -or $library.AssignmentsNeedingReview -gt 0 -or $parent.AssignmentsNeedingReview -gt 0 -or $script:AclIssues.Count -gt 0)
-    $result=[pscustomobject][ordered]@{Test='W05A-LibraryAclConfiguration';Version='0.1.0'
+    $result=[pscustomobject][ordered]@{Test='W05A-LibraryAclConfiguration';Version='0.1.1'
         Outcome=if($script:AclIssues.Count){'Partial'}elseif($reviewNeeded){'NeedsReview'}else{'ConfigurationReviewed'}
         TenantId=$TenantId.ToString();SiteUrl=$web.Url;ListId=$ListId.ToString();Authentication='ExistingSetupDelegatedInteractive'
         SetupClientId=$PortalClientId.ToString();PublisherClientId=$PublisherClientId.ToString()
