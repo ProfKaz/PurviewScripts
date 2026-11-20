@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 1,
-  "SuiteVersion": "1.2.0",
+  "SuiteVersion": "1.2.1",
   "Project": "Endpoint MIP Scanner",
   "Bootstrap": "Install-EndpointMIPScanner.ps1",
   "Scripts": [
@@ -201,7 +201,7 @@
     },
     {
       "Path": "Install-EndpointMIPScanner.ps1",
-      "Version": "1.2.0",
+      "Version": "1.2.1",
       "TrackingId": "0576cc7a-692e-4876-bfe5-d1fb62a30116"
     },
     {
@@ -231,22 +231,22 @@
     },
     {
       "Path": "LocalMIPScanner.WinPS51/LocalMIPSharePoint.psm1",
-      "Version": "1.0.0",
+      "Version": "1.0.1",
       "TrackingId": "2fc2ddf1-533f-471d-8870-02794f401e56"
     },
     {
       "Path": "LocalMIPScanner.WinPS51/Test-LocalMIPPublisher.ps1",
-      "Version": "1.0.0",
+      "Version": "1.0.1",
       "TrackingId": "dedef6b8-8c82-4fe4-954b-10d9b5cb4601"
     },
     {
       "Path": "LocalMIPScanner.WinPS51/tests/Test-Publisher.ps1",
-      "Version": "1.0.0",
+      "Version": "1.0.1",
       "TrackingId": "1bb2400c-1847-42af-937f-72021625400b"
     },
     {
       "Path": "deployment/Initialize-ScannerPortalPublisher.ps1",
-      "Version": "1.0.0",
+      "Version": "1.0.1",
       "TrackingId": "6fbce7f4-ce63-4e3b-b992-fc31301dca4d"
     }
   ],
