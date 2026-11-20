@@ -6,3 +6,8 @@
 - Introduce instalación única por etapas y evidencia de dependencias.
 - Mantiene el logo Kaz Demos junto al laboratorio y lo usa en las apps de instalación.
 - Asigna versión e ID estable a scripts y módulos; conserva los milestones previos.
+
+## Consolidación local — 2026-11-20
+
+- Consolidador 1.0.0: snapshot por archivo, procedencia de reintentos, UTF-8 y conciliación de rutas contra el inventario.
+- Outbox con publicación por directorio, verificación de hashes, entrada de comprobación y pruebas PS5.1.
