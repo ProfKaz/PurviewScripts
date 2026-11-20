@@ -1,4 +1,4 @@
-# Endpoint MIP Scanner
+﻿# Endpoint MIP Scanner
 
 Versión 1.2.0. Scanner Windows PowerShell 5.1, laboratorio MIP compartido y ScannerPortal bajo una sola carpeta.
 
@@ -20,7 +20,7 @@ Antes del merge, usa `-Ref feat/endpoint-unified-installer`. El instalador fija 
 | Local (predeterminada) | Download, Visual C++ x64 si falta, SDK .NET 10 x64, compilación/autodiagnóstico del lab y prueba rápida del estado del scanner. |
 | MipApp | Local y creación/reutilización de la app MIP, con logo local y login administrativo. |
 | Portal | Local y preparación administrativa de PS7.6.0/PnP3.2.0/Graph, app del portal con logo y sitio/bibliotecas/listas piloto. |
-| Publisher | Local y preparación del publicador para un sitio existente, con certificado de máquina y grant por carpeta de dispositivo. Requiere consola elevada y administrador Entra/SharePoint. |
+| Publisher | Preparación del publicador para un sitio existente, certificado CurrentUser y grant por carpeta de registro. Sin elevación local; requiere autorización administrativa Entra/SharePoint durante el registro. Omite instalar/compilar el SDK. |
 | All | Local, MipApp y Portal en orden. Solicita los datos faltantes en consola. |
 
 ```powershell

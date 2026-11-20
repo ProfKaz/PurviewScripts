@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.2.0
+.VERSION 1.2.1
 
 .GUID 0576cc7a-692e-4876-bfe5-d1fb62a30116
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+2026-11-20  1.2.1  CurrentUser publisher credentials without local elevation.
 2026-11-20  1.2.0  Add Publisher stage for an existing portal site.
 2026-11-18  1.1.0  Consolidated Endpoint MIP Scanner layout, shared lab and unified setup.
 Tracking ID: 0576cc7a-692e-4876-bfe5-d1fb62a30116
@@ -22,7 +23,7 @@ Endpoint MIP Scanner component: Install-EndpointMIPScanner.ps1.
 .NOTES
 HISTORY
 Script      : Install-EndpointMIPScanner.ps1
-Version     : 1.2.0
+Version     : 1.2.1
 Tracking ID : 0576cc7a-692e-4876-bfe5-d1fb62a30116
 2026-11-18  Kaz Demos  First tracked suite release; preserves prior milestone implementation.
 #>
@@ -142,7 +143,7 @@ try {
         $_.type -eq 'blob' -and $_.mode -in '100644','100755' -and $_.path.StartsWith($prefix)
     })
     if ($files.Count -eq 0) { throw 'Suite not found in this reference.' }
-    Write-Host "Endpoint MIP Scanner 1.2.0 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
+    Write-Host "Endpoint MIP Scanner 1.2.1 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
     Write-Host "Verifying $($files.Count) suite files in $root"
     $stamp = [guid]::NewGuid().ToString('N')
     $staging = Join-Path $work $stamp
@@ -192,13 +193,14 @@ try {
     }
     Write-SetupJson (Join-Path $work 'files.json') @{ Repository = $repository; Commit = $sha; Files = $manifest.ToArray() }
     $state = [ordered]@{
-        InstallId = $stamp; SuiteVersion = '1.2.0'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
+        InstallId = $stamp; SuiteVersion = '1.2.1'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
         Completed = @(); Status = 'Running'; RestartRequired = $false; VisualCppPackageSha256 = $null
     }
     $state.Completed += 'VerifiedDownload'
     Write-Host "Verified suite. Published $($downloads.Count) changed files."
     Write-SetupJson (Join-Path $work 'status.json') $state
     if ($Stage -ne 'Download') {
+        if ($Stage -ne 'Publisher') {
         Install-VisualCpp
         $sdkParameters = @{ Ref = $sha; Destination = $root }
         if ($DotNetPath) { $sdkParameters.DotNetPath = $DotNetPath }
@@ -207,6 +209,7 @@ try {
         Write-SetupJson (Join-Path $work 'lab.json') $lab
         Invoke-ChildScript (Join-Path $PSHOME 'powershell.exe') (Join-Path $root 'LocalMIPScanner.WinPS51/tests/Test-StateFormat.ps1') @{}
         $state.Completed += 'ScannerStateSmokeTest'
+        }
         if ($Stage -in 'MipApp','All') {
             if ($TenantId -eq [guid]::Empty) { $TenantId = [guid](Read-Host 'Tenant ID') }
             $savedMipPath = Join-Path $work 'mip-app.json'
@@ -260,7 +263,7 @@ try {
         Modules = @(Get-Module | Select-Object Name, Version, Path)
         Scripts = (Get-Content -LiteralPath (Join-Path $root 'suite-manifest.json') -Raw | ConvertFrom-Json).Scripts
     }
-    if (Get-Variable lab -ErrorAction SilentlyContinue) {
+    if (Get-Variable lab -Scope Script -ErrorAction SilentlyContinue) {
         $dependencyEvidence.DotNetPath = $lab.DotNetPath
         $dependencyEvidence.DotNetSdks = @(& $lab.DotNetPath --list-sdks)
         $dependencyEvidence.DotNetRuntimes = @(& $lab.DotNetPath --list-runtimes)

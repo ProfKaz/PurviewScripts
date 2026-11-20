@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.0.0
+.VERSION 1.0.1
 
 .GUID dedef6b8-8c82-4fe4-954b-10d9b5cb4601
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+2026-11-20  1.0.1  CurrentUser publisher credentials without local elevation.
 2026-11-20  1.0.0  Device-folder publisher registration and app-only permission preflight.
 #>
 
@@ -19,7 +20,7 @@
 Endpoint MIP Scanner component: LocalMIPScanner.WinPS51/Test-LocalMIPPublisher.ps1.
 .NOTES
 HISTORY
-Version     : 1.0.0
+Version     : 1.0.1
 Tracking ID : dedef6b8-8c82-4fe4-954b-10d9b5cb4601
 2026-11-20  Kaz Demos  Initial publisher preparation and permission verification.
 #>
@@ -28,7 +29,7 @@ Tracking ID : dedef6b8-8c82-4fe4-954b-10d9b5cb4601
 [CmdletBinding()]
 param([string] $ConfigurationPath)
 $ErrorActionPreference = 'Stop'
-if (-not $ConfigurationPath) { $ConfigurationPath = Join-Path $env:ProgramData 'EndpointMIPScanner/Publisher/publisher.json' }
+if (-not $ConfigurationPath) { $ConfigurationPath = Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner/Publisher/publisher.json' }
 Import-Module (Join-Path $PSScriptRoot 'LocalMIPSharePoint.psm1') -Force
 $configuration = Get-Content -LiteralPath $ConfigurationPath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json
 $result = Test-LocalMIPPublisher $configuration

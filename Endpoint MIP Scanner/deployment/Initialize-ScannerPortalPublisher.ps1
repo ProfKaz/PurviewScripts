@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.0.0
+.VERSION 1.0.1
 
 .GUID 6fbce7f4-ce63-4e3b-b992-fc31301dca4d
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+2026-11-20  1.0.1  CurrentUser publisher credentials without local elevation.
 2026-11-20  1.0.0  Device-folder publisher registration and app-only permission preflight.
 #>
 
@@ -19,7 +20,7 @@
 Endpoint MIP Scanner component: deployment/Initialize-ScannerPortalPublisher.ps1.
 .NOTES
 HISTORY
-Version     : 1.0.0
+Version     : 1.0.1
 Tracking ID : 6fbce7f4-ce63-4e3b-b992-fc31301dca4d
 2026-11-20  Kaz Demos  Initial publisher preparation and permission verification.
 #>
@@ -43,15 +44,11 @@ if ($TenantId -eq [guid]::Empty -or $SiteUrl.Scheme -ne 'https' -or
 $plan = [ordered]@{
     SiteUrl = $SiteUrl.AbsoluteUri.TrimEnd('/'); TenantId = $TenantId.ToString()
     Library = 'ScannerPortalLanding'; RuntimePermission = 'Files.SelectedOperations.Selected'
-    Grant = 'write on one registered device folder'; Authentication = 'LocalMachine certificate'
+    Grant = 'write on one registered device folder'; Authentication = 'CurrentUser certificate'
     FolderPattern = 'devices/<shard>/<deviceId>/batches/<yyyy>/<MM>/<batchId>'
-    PublishesRealBatch = $false; RequiresElevation = $true
+    PublishesRealBatch = $false; RequiresElevation = $false
 }
 if ($Mode -eq 'Plan') { [pscustomobject]$plan; return }
-$principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
-if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    throw 'Publisher setup requires an elevated administrative console for the machine certificate.'
-}
 $suite = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $suite 'LocalMIPScanner.WinPS51/LocalMIPSharePoint.psm1') -Force
 foreach ($module in 'Microsoft.Graph.Authentication','Microsoft.Graph.Applications') {
@@ -106,20 +103,20 @@ function Assert-RestrictedLanding($List, $Connection, [string] $AllowedAppId) {
     }
 }
 
-# The authoritative publisher configuration is kept outside the user-writable deployment.
-$protected = Join-Path $env:ProgramData 'EndpointMIPScanner/Publisher'
+# Publisher configuration and private key belong to the task account.
+$protected = Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner/Publisher'
 for ($dir = [IO.DirectoryInfo]::new($protected); $dir; $dir = $dir.Parent) {
     if ($dir.Exists -and ($dir.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Reparse publisher configuration path.' }
 }
 [void][IO.Directory]::CreateDirectory($protected)
 $acl = [Security.AccessControl.DirectorySecurity]::new()
 $acl.SetAccessRuleProtection($true, $false)
-foreach ($sid in 'S-1-5-18','S-1-5-32-544') {
+foreach ($sid in 'S-1-5-18', ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value)) {
     $identity = [Security.Principal.SecurityIdentifier]::new($sid)
     $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($identity, 'FullControl','ContainerInherit,ObjectInherit','None','Allow'))
 }
 Set-Acl -LiteralPath $protected -AclObject $acl
-Set-Acl -LiteralPath (Split-Path -Parent $protected) -AclObject $acl
+
 $configurationPath = Join-Path $protected 'publisher.json'
 if ((Test-Path -LiteralPath $configurationPath) -and
     ((Get-Item -LiteralPath $configurationPath).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
@@ -129,10 +126,14 @@ $state = if (Test-Path -LiteralPath $configurationPath) {
     Get-Content -LiteralPath $configurationPath -Raw | ConvertFrom-Json -AsHashtable
 } else {
     @{ SchemaVersion = 1; TenantId = $TenantId.ToString(); SiteUrl = $plan.SiteUrl
-        DeviceId = [guid]::NewGuid().ToString(); DeviceName = $env:COMPUTERNAME }
+        DeviceId = [guid]::NewGuid().ToString(); DeviceName = $env:COMPUTERNAME; CertificateStoreLocation = 'CurrentUser'; ExecutionAccountSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value }
 }
 if ($state.TenantId -ne $TenantId.ToString() -or $state.SiteUrl -ne $plan.SiteUrl -or $state.DeviceName -ne $env:COMPUTERNAME) {
     throw 'Saved publisher registration does not match this tenant, site or computer.'
+}
+if ($state.CertificateStoreLocation -ne 'CurrentUser' -or
+    $state.ExecutionAccountSid -ne [Security.Principal.WindowsIdentity]::GetCurrent().User.Value) {
+    throw 'Publisher configuration belongs to a different account or certificate store.'
 }
 if ($PublisherClientId -ne [guid]::Empty -and $state.ClientId -and $state.ClientId -ne $PublisherClientId.ToString()) {
     throw 'Explicit publisher differs from the saved registration.'
@@ -176,18 +177,18 @@ try {
     $root = Invoke-SetupGraph "https://graph.microsoft.com/v1.0/drives/$($drive.id)/root"
 
     if (-not $state.CertificateThumbprint) {
-        $cert = New-SelfSignedCertificate -Subject ("CN=EndpointMIPScanner-" + $state.DeviceId) -CertStoreLocation Cert:\LocalMachine\My -KeyAlgorithm RSA -KeyLength 2048 -KeyExportPolicy NonExportable -KeyUsage DigitalSignature -Provider 'Microsoft Software Key Storage Provider' -NotAfter (Get-Date).AddYears(1)
+        $cert = New-SelfSignedCertificate -Subject ("CN=EndpointMIPScanner-" + $state.DeviceId) -CertStoreLocation Cert:\CurrentUser\My -KeyAlgorithm RSA -KeyLength 2048 -KeyExportPolicy NonExportable -KeyUsage DigitalSignature -Provider 'Microsoft Software Key Storage Provider' -NotAfter (Get-Date).AddYears(1)
         $state.CertificateThumbprint = $cert.Thumbprint
         Save-PublisherSetup $state $configurationPath
     }
-    $cert = Get-Item -LiteralPath ("Cert:\LocalMachine\My\" + $state.CertificateThumbprint)
+    $cert = Get-Item -LiteralPath ("Cert:\CurrentUser\My\" + $state.CertificateThumbprint)
     if (-not $cert.HasPrivateKey -or $cert.NotAfter -le (Get-Date)) { throw 'Existing publisher certificate needs explicit renewal.' }
     $rsa = [Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($cert)
-    try { $keyPath = Join-Path $env:ProgramData ("Microsoft/Crypto/Keys/" + $rsa.Key.UniqueName) }
+    try { $keyPath = Join-Path $env:APPDATA ("Microsoft/Crypto/Keys/" + $rsa.Key.UniqueName) }
     finally { $rsa.Dispose() }
     $keyAcl = [Security.AccessControl.FileSecurity]::new()
     $keyAcl.SetAccessRuleProtection($true,$false)
-    foreach ($sid in 'S-1-5-18','S-1-5-32-544') {
+    foreach ($sid in 'S-1-5-18', ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value)) {
         $keyAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($sid),'FullControl','Allow'))
     }
     Set-Acl -LiteralPath $keyPath -AclObject $keyAcl

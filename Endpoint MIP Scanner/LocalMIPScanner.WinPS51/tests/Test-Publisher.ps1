@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.0.0
+.VERSION 1.0.1
 
 .GUID 1bb2400c-1847-42af-937f-72021625400b
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+2026-11-20  1.0.1  CurrentUser publisher credentials without local elevation.
 2026-11-20  1.0.0  Device-folder publisher registration and app-only permission preflight.
 #>
 
@@ -19,7 +20,7 @@
 Endpoint MIP Scanner component: LocalMIPScanner.WinPS51/tests/Test-Publisher.ps1.
 .NOTES
 HISTORY
-Version     : 1.0.0
+Version     : 1.0.1
 Tracking ID : 1bb2400c-1847-42af-937f-72021625400b
 2026-11-20  Kaz Demos  Initial publisher preparation and permission verification.
 #>
@@ -63,6 +64,33 @@ try {
         if (-not $valid) { throw 'Assertion signature invalid.' }
     } finally { $public.Dispose() }
 } finally { $certificate.Dispose(); $rsa.Dispose() }
+
+# Exercise the actual CurrentUser store; only the token HTTP exchange is mocked.
+& $module {
+    function script:Invoke-RestMethod {
+        param($Uri, $Method, $Body, $ContentType)
+        if ($Method -ne 'Post' -or $Body.grant_type -ne 'client_credentials') { throw 'Unexpected token fixture request.' }
+        @{ access_token = 'fixture-store-token' }
+    }
+}
+$storeCertificate = New-SelfSignedCertificate -Subject ('CN=EndpointMIPScanner-UserScopeTest-' + [guid]::NewGuid().ToString('N')) -CertStoreLocation Cert:\CurrentUser\My\ -KeyAlgorithm RSA -KeyLength 2048 -KeyExportPolicy NonExportable -Provider 'Microsoft Software Key Storage Provider' -NotAfter (Get-Date).AddHours(1)
+try {
+    $storeConfiguration = [pscustomobject]@{
+        TenantId = 'd88f1561-bdab-46f0-b8ba-bfca21e1b5c4'; ClientId = 'a0e89d29-a20a-45af-8971-54fd03a25dac'
+        CertificateThumbprint = $storeCertificate.Thumbprint; CertificateStoreLocation = 'CurrentUser'
+        ExecutionAccountSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    }
+    $storeToken = Get-PublisherAccessToken $storeConfiguration
+    if ($storeToken -ne 'fixture-store-token') { throw 'CurrentUser certificate token exchange failed.' }
+    $storeConfiguration.CertificateStoreLocation = 'LocalMachine'
+    Assert-Fails { Get-PublisherAccessToken $storeConfiguration }
+    $storeConfiguration.CertificateStoreLocation = 'CurrentUser'
+    $storeConfiguration.ExecutionAccountSid = 'S-1-0-0'
+    Assert-Fails { Get-PublisherAccessToken $storeConfiguration }
+} finally {
+    # Delete only the certificate and key created by this test.
+    Remove-Item -LiteralPath ('Cert:\CurrentUser\My\' + $storeCertificate.Thumbprint) -DeleteKey -Force
+}
 
 & $module {
     $script:ControlAllowed = $false
@@ -116,4 +144,4 @@ Assert-Fails { Test-LocalMIPPublisher $configuration }
 Assert-Fails { Test-LocalMIPPublisher $configuration }
 $deleted = & $module { $script:Deleted }
 if (@($deleted).Count -ne 5 -or @($deleted | Where-Object { $_ -ne 'probe' }).Count) { throw 'Probe cleanup did not use its own ID.' }
-'PASS: RSA client assertion/UTC epoch, device partition, token use, remote hash, negative access and probe cleanup (mock transport)'
+'PASS: CurrentUser certificate, account/store mismatch rejection, RSA assertion, partitions, remote hash and isolation (mock transport)'

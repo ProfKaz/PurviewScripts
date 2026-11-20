@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.0.0
+.VERSION 1.0.1
 
 .GUID 2fc2ddf1-533f-471d-8870-02794f401e56
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+2026-11-20  1.0.1  CurrentUser publisher credentials without local elevation.
 2026-11-20  1.0.0  Device-folder publisher registration and app-only permission preflight.
 #>
 
@@ -19,7 +20,7 @@
 Endpoint MIP Scanner component: LocalMIPScanner.WinPS51/LocalMIPSharePoint.psm1.
 .NOTES
 HISTORY
-Version     : 1.0.0
+Version     : 1.0.1
 Tracking ID : 2fc2ddf1-533f-471d-8870-02794f401e56
 2026-11-20  Kaz Demos  Initial publisher preparation and permission verification.
 #>
@@ -67,7 +68,11 @@ function Get-PublisherAccessToken {
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $client = [guid]$Configuration.ClientId
     if ($tenant -eq [guid]::Empty -or $client -eq [guid]::Empty) { throw 'Invalid publisher tenant/client ID.' }
-    $certificate = Get-Item -LiteralPath ("Cert:\LocalMachine\My\" + $Configuration.CertificateThumbprint)
+    if ($Configuration.CertificateStoreLocation -ne 'CurrentUser' -or
+        $Configuration.ExecutionAccountSid -ne [Security.Principal.WindowsIdentity]::GetCurrent().User.Value) {
+        throw 'Run the publisher as the enrolled task account with its CurrentUser certificate.'
+    }
+    $certificate = Get-Item -LiteralPath ("Cert:\CurrentUser\My\" + $Configuration.CertificateThumbprint)
     if (-not $certificate.HasPrivateKey -or $certificate.NotAfter.ToUniversalTime() -le [datetime]::UtcNow) {
         throw 'Publisher certificate is expired or has no accessible private key.'
     }
@@ -202,11 +207,13 @@ function Test-LocalMIPPublisher {
         }
         if (-not $denied) { throw 'Publisher can access the ungranted control folder. Isolation failed.' }
         [pscustomobject]@{
-            Verified = $true; Authentication = 'CertificateAppOnly'; SiteUrl = $Configuration.SiteUrl
+            Verified = $true; Authentication = 'CertificateAppOnly'; CertificateStore = 'CurrentUser'; SiteUrl = $Configuration.SiteUrl
             ClientId = $Configuration.ClientId; DeviceId = $Configuration.DeviceId
             DeviceName = $Configuration.DeviceName; Library = $Configuration.Library
             DeviceFolder = $Configuration.DeviceFolderPath
             RuntimePermission = 'Files.SelectedOperations.Selected'
+            LocalElevationRequired = $false
+            CredentialOwnerCanModifyOwnReports = $true
             CertificateThumbprint = $Configuration.CertificateThumbprint
             WriteAndDownloadHashVerified = $true; UngrantedFolderDenied = $true
             EndUserAccessTest = 'PendingSeparateIdentity'; BatchUploaded = $false
