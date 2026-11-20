@@ -83,7 +83,8 @@ function Get-SetupPages([string] $Uri) {
     }
 }
 function Assert-RestrictedLanding($List, $Connection, [string] $AllowedAppId) {
-    if (-not $List.HasUniqueRoleAssignments) { throw 'Landing inherits permissions. Review library access before enrolling a publisher.' }
+    $unique = Get-PnPProperty -ClientObject $List -Property HasUniqueRoleAssignments -Connection $Connection
+    if (-not $unique) { throw 'Landing inherits permissions. Review library access before enrolling a publisher.' }
     $admins = @(Get-PnPSiteCollectionAdmin -Connection $Connection | ForEach-Object { $_.LoginName.ToLowerInvariant() })
     $roles = Get-PnPProperty -ClientObject $List -Property RoleAssignments -Connection $Connection
     foreach ($assignment in $roles) {
@@ -251,7 +252,7 @@ try {
         $grant = @(Invoke-SetupGraph $permissionUri POST @{ grantedToV2 = @{ application = @{ id = $PublisherClientId.ToString(); displayName = $name } }; roles = @('write') })
     }
     if ($grant.Count -ne 1 -or @($grant[0].roles).Count -ne 1 -or $grant[0].roles[0] -ne 'write') { throw 'Unexpected device folder grant.' }
-    $folderAcl = Get-PnPListItem -List $listId -Id ([int]$listItem.id) -Includes HasUniqueRoleAssignments -Connection $connection
+    $folderAcl = Get-PnPListItem -List $listId -Id ([int]$listItem.id) -Connection $connection
     Assert-RestrictedLanding $folderAcl $connection $PublisherClientId.ToString()
 
     $isolationUri = "https://graph.microsoft.com/v1.0/drives/$($drive.id)/items/$($root.id):/_permission-control"
