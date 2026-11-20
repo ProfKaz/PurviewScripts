@@ -1,6 +1,6 @@
 # Endpoint MIP Scanner
 
-Versión 1.1.0. Scanner Windows PowerShell 5.1, laboratorio MIP compartido y ScannerPortal bajo una sola carpeta.
+Versión 1.2.0. Scanner Windows PowerShell 5.1, laboratorio MIP compartido y ScannerPortal bajo una sola carpeta.
 
 ## Instalación única
 
@@ -20,6 +20,7 @@ Antes del merge, usa `-Ref feat/endpoint-unified-installer`. El instalador fija 
 | Local (predeterminada) | Download, Visual C++ x64 si falta, SDK .NET 10 x64, compilación/autodiagnóstico del lab y prueba rápida del estado del scanner. |
 | MipApp | Local y creación/reutilización de la app MIP, con logo local y login administrativo. |
 | Portal | Local y preparación administrativa de PS7.6.0/PnP3.2.0/Graph, app del portal con logo y sitio/bibliotecas/listas piloto. |
+| Publisher | Local y preparación del publicador para un sitio existente, con certificado de máquina y grant por carpeta de dispositivo. Requiere consola elevada y administrador Entra/SharePoint. |
 | All | Local, MipApp y Portal en orden. Solicita los datos faltantes en consola. |
 
 ```powershell
@@ -50,3 +51,7 @@ Los encabezados PSScriptInfo incluyen VERSION, GUID, AUTHOR y RELEASE NOTES; HIS
 Las pruebas del scanner se ejecutan desde LocalMIPScanner.WinPS51. Recupera las rutas del lab con `Get-Content .\.endpoint-install\lab.json -Raw | ConvertFrom-Json`. El aprovisionamiento Entra/SharePoint y la llegada de eventos se validan en el tenant; el instalador no los da por probados al descargar archivos.
 
 [Plan M1–M5](LocalMIPScanner.WinPS51/README.md) · [Plan integral SharePoint](ScannerPortal/docs/END-TO-END-TEST-PLAN.md) · [Milestones](ScannerPortal/docs/MILESTONES.md)
+
+## Permisos y carpetas por dispositivo
+
+La [preparación del publicador](ScannerPortal/docs/PUBLISHER-PREFLIGHT.md) usa el sitio existente y conserva el lote real pendiente mientras valida autenticación app-only, escritura/lectura con hash y aislamiento de carpeta.
