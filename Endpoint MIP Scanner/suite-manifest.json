@@ -213,6 +213,21 @@
       "Path": "tests/Test-SuiteLayout.ps1",
       "Version": "1.1.0",
       "TrackingId": "3832d82b-5823-4ecd-b062-801856020826"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/LocalMIPReporting.psm1",
+      "Version": "1.0.0",
+      "TrackingId": "7ffa2766-848b-4832-b54c-7d8f4098ba42"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/New-LocalMIPReportBatch.ps1",
+      "Version": "1.0.0",
+      "TrackingId": "d279bf37-ff61-433b-8f20-4b5210704aa7"
+    },
+    {
+      "Path": "LocalMIPScanner.WinPS51/tests/Test-ReportBatch.ps1",
+      "Version": "1.0.0",
+      "TrackingId": "9e915811-26d1-4f05-9db3-6d8b805fe447"
     }
   ],
   "Dependencies": [

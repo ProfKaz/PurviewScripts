@@ -59,3 +59,7 @@ if ($LASTEXITCODE -ne 0) { throw 'SSO failed' }
 | Inventario y auditoría local | El instalador del scanner descarga configuración, módulos, pruebas y `WinPSCompatibility.ps1`. El runtime usa .NET Framework incluido en Windows. La lista de archivos y hashes queda en `.localmipscanner-winps51-install.json`. |
 | Laboratorio | El instalador del SDK descarga el código del laboratorio. Usa un SDK .NET 10 x64 indicado por `-DotNetPath`, una instalación compatible detectada, o descarga una copia verificada desde Microsoft. La compilación restaura los paquetes de NuGet declarados en `labs/MipSdkAudit/MipSdkAudit.csproj`. Registra `SourceCommit`, `DotNetPath`, `LabAssembly` y `SelfTestPassed`. |
 | Pruebas con el tenant | La prueba autenticada usa Windows WAM, la configuración del piloto y una aplicación Entra autorizada. Los módulos Microsoft Graph solo se necesitan al ejecutar el script opcional de registro de la aplicación. El cliente Purview con `Get-FileStatus` y `Set-FileLabel` se usa como control independiente en M6. |
+
+## Informes locales
+
+El [consolidador de lotes](REPORT-BATCHES.md) incorpora los resultados del descubrimiento amplio y sus reintentos, verifica la cobertura y genera un lote PendingUpload con hashes para la siguiente prueba de entrega.
