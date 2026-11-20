@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.1.0
+.VERSION 1.2.0
 
 .GUID 0576cc7a-692e-4876-bfe5-d1fb62a30116
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+2026-11-20  1.2.0  Add Publisher stage for an existing portal site.
 2026-11-18  1.1.0  Consolidated Endpoint MIP Scanner layout, shared lab and unified setup.
 Tracking ID: 0576cc7a-692e-4876-bfe5-d1fb62a30116
 #>
@@ -21,7 +22,7 @@ Endpoint MIP Scanner component: Install-EndpointMIPScanner.ps1.
 .NOTES
 HISTORY
 Script      : Install-EndpointMIPScanner.ps1
-Version     : 1.1.0
+Version     : 1.2.0
 Tracking ID : 0576cc7a-692e-4876-bfe5-d1fb62a30116
 2026-11-18  Kaz Demos  First tracked suite release; preserves prior milestone implementation.
 #>
@@ -31,11 +32,12 @@ Tracking ID : 0576cc7a-692e-4876-bfe5-d1fb62a30116
 param(
     [ValidatePattern('^[A-Za-z0-9._/-]+$')][string] $Ref = 'main',
     [string] $Destination,
-    [ValidateSet('Download','Local','MipApp','Portal','All')][string] $Stage = 'Local',
+    [ValidateSet('Download','Local','MipApp','Portal','Publisher','All')][string] $Stage = 'Local',
     [string] $DotNetPath,
     [guid] $TenantId = [guid]::Empty,
     [guid] $MipClientId = [guid]::Empty,
     [guid] $PortalClientId = [guid]::Empty,
+    [guid] $PublisherClientId = [guid]::Empty,
     [string] $AdminUrl,
     [string] $SiteUrl,
     [string] $Owner,
@@ -140,7 +142,7 @@ try {
         $_.type -eq 'blob' -and $_.mode -in '100644','100755' -and $_.path.StartsWith($prefix)
     })
     if ($files.Count -eq 0) { throw 'Suite not found in this reference.' }
-    Write-Host "Endpoint MIP Scanner 1.1.0 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
+    Write-Host "Endpoint MIP Scanner 1.2.0 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
     Write-Host "Verifying $($files.Count) suite files in $root"
     $stamp = [guid]::NewGuid().ToString('N')
     $staging = Join-Path $work $stamp
@@ -190,7 +192,7 @@ try {
     }
     Write-SetupJson (Join-Path $work 'files.json') @{ Repository = $repository; Commit = $sha; Files = $manifest.ToArray() }
     $state = [ordered]@{
-        InstallId = $stamp; SuiteVersion = '1.1.0'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
+        InstallId = $stamp; SuiteVersion = '1.2.0'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
         Completed = @(); Status = 'Running'; RestartRequired = $false; VisualCppPackageSha256 = $null
     }
     $state.Completed += 'VerifiedDownload'
@@ -238,6 +240,18 @@ try {
                 Invoke-ChildScript $pwsh $portal $parameters
             } finally { $env:DOTNET_ROOT = $previousDotNetRoot }
             $state.Completed += 'PortalFoundation'
+        }
+        if ($Stage -eq 'Publisher') {
+            if ($TenantId -eq [guid]::Empty) { $TenantId = [guid](Read-Host 'Tenant ID') }
+            if (-not $SiteUrl) { $SiteUrl = Read-Host 'Existing ScannerPortal site URL' }
+            $pwsh = Install-AdministrativePowerShell
+            $parameters = @{
+                TenantId = $TenantId; SiteUrl = $SiteUrl; EvidenceDirectory = $work; Mode = 'Apply'
+            }
+            if ($PortalClientId -ne [guid]::Empty) { $parameters.PortalClientId = $PortalClientId }
+            if ($PublisherClientId -ne [guid]::Empty) { $parameters.PublisherClientId = $PublisherClientId }
+            Invoke-ChildScript $pwsh (Join-Path $root 'deployment/Initialize-ScannerPortalPublisher.ps1') $parameters
+            $state.Completed += 'PublisherPreflight'
         }
     }
     $state.Status = 'Completed'
