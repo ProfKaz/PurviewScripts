@@ -25,7 +25,8 @@ No distribuir todavía un PFX ni crear certificados nuevos. Primero comprobar lo
 | W02A | Consultar aplicaciones y permisos existentes en Entra con acceso administrativo de lectura | Script implementado; validación del tenant pendiente |
 | W02B | Obtener un token con la identidad de carga elegida; sin crear carpetas ni cargar archivos | Pendiente de revisar W02A y decidir ubicación de credencial |
 | W03A | Resolver sitio/biblioteca e inspeccionar grants de aplicación, solo lectura administrativa | Script implementado; tenant pendiente |
-| W03B | Conceder acceso seleccionado al destino revisado y comprobarlo con la app | Pendiente de W03A |
+| W03B | Conceder write seleccionado sobre la biblioteca identificada y verificar por lectura | Script implementado; tenant pendiente |
+| W03C | Comprobar acceso efectivo al destino con el certificado de la app | Pendiente de W03B |
 | W04 | Crear una carpeta de piloto y subir un marcador sintético; descargar/verificar hash | Pendiente |
 | W05 | Verificar y subir una copia del lote real existente, manifiesto al final y reintento | Pendiente |
 | W06 | Repetición, desconexión, otra estación, rendimiento y rotación/revocación | Pendiente |
@@ -115,3 +116,23 @@ Compartir WORK W03A PARA COMPARTIR. Outcome=Inspected y LibraryFound=true identi
 Test-WorkSharePointTarget prueba con Graph simulado el alcance de lectura, consultas GET, inclusión de recursos ocultos, resolución de ListId/DriveId, grants presentes/ausentes, denegación parcial y biblioteca ausente. Se ejecutó análisis sintáctico y catálogo de scripts; no se consultó SharePoint real por parte del agente.
 
 Fuentes: [enumeración y faceta system](https://learn.microsoft.com/en-us/graph/api/list-list?view=graph-rest-1.0), [lectura de permisos de lista](https://learn.microsoft.com/en-us/graph/api/list-list-permissions?view=graph-rest-1.0), [consentimiento Selected y grant de recurso](https://learn.microsoft.com/en-us/graph/permissions-selected-overview).
+
+### W03A recibido y siguiente W03B
+
+El usuario confirmó biblioteca ScannerPortalLanding encontrada, IDs del sitio/lista/drive resueltos, Hidden=true, sin concesiones para la app publicadora y sin errores. La revisión de ACL de usuarios ordinarios sigue pendiente; no inferir protección a partir de Hidden.
+
+Set-WorkSharePointLibraryGrant.ps1 es Plan por defecto. Apply añade una sola concesión write a la aplicación Kaz Demos Scanner Publisher - Work sobre ScannerPortalLanding, validando primero tenant, aplicación, URL del sitio, ID y nombre/tipo de biblioteca. Solo puede escribir mediante POST al endpoint de permisos de esa lista. No concede permisos al sitio ni a Config, no cambia roles desconocidos ni elimina concesiones. Repetir reutiliza el mismo grant. Después del POST consulta el recurso para verificar; si hay demora solo repite lecturas.
+
+La sesión administrativa pide Application.Read.All y Sites.ReadWrite.All al aplicar. El publicador conserva Lists.SelectedOperations.Selected, con el grant write limitado a esa biblioteca. Estos son permisos distintos y no se amplía la app a Sites.ReadWrite.All. No requiere PnP/PortalClientId, no lee la clave privada, no genera certificados, no crea carpetas ni sube datos.
+
+```powershell
+& $adminPS -NoProfile -File '.\Set-WorkSharePointLibraryGrant.ps1' `
+    -TenantId 'd88f1561-bdab-46f0-b8ba-bfca21e1b5c4' `
+    -SiteUrl 'https://mhcybersecuritydemos.sharepoint.com/sites/ScannerPortalPilot' `
+    -ListId '0e82d3f5-3357-4f05-b604-049e13fb9491' `
+    -PublisherClientId '4ce79552-fbef-4b87-a9b9-abd07e5f2dca' -Apply
+```
+
+Compartir WORK W03B PARA COMPARTIR. Outcome=Verified y GrantReadBackVerified=true confirman la concesión administrativa. PublisherEffectiveAccessTested=false es intencional: la siguiente W03C usará el certificado. W04 escribe un marcador sintético; antes de W05 con evidencia real se debe revisar acceso efectivo de usuarios, herencia y alcance compartido. La concesión de una app es una modificación de seguridad del recurso; este script no demuestra el aislamiento de usuarios ni verifica todas las concesiones heredadas o por carpeta.
+
+Test-WorkSharePointLibraryGrant pasó con Graph simulado: Plan sin escritura, payload de write exacto a la única biblioteca, lectura posterior, repetición sin duplicado y rechazo de otra app, otra biblioteca o rol inesperado. No se concedió acceso real por parte del agente. [API y permiso delegado mínimo para crear la concesión](https://learn.microsoft.com/en-us/graph/api/list-post-permissions?view=graph-rest-1.0).
