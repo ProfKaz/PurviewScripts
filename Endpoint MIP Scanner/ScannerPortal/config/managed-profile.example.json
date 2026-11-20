@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "profileId": "workstations-audit-pilot",
+  "version": "1.0.0",
+  "expiresUtc": "2027-01-01T00:00:00Z",
+  "execution": {
+    "roots": ["%USERPROFILE%\\Documents"],
+    "auditContent": true,
+    "maxSeconds": 120,
+    "idleSeconds": 300,
+    "paused": false
+  },
+  "files": {
+    "extensions.json": [".txt", ".csv", ".docx", ".xlsx", ".pptx", ".pdf"],
+    "exclusions.json": ["%SystemRoot%"],
+    "performance.json": {"batchSize": 100, "pauseMilliseconds": 50},
+    "incremental.json": {
+      "enabled": true,
+      "rescanIntervalDays": 30,
+      "detectModifiedFiles": true,
+      "detectDeletedFiles": true,
+      "forceFullScan": false,
+      "maxFileSizeMB": 100,
+      "stateDirectory": "%LOCALAPPDATA%\\EndpointMIPScanner\\ManagedEndpoint\\scanner-state"
+    },
+    "classifiers.json": {
+      "maxBytes": 1048576,
+      "rules": [{"id": "synthetic-pilot-id", "pattern": "\\bPILOT-[0-9]{6}\\b"}]
+    }
+  }
+}

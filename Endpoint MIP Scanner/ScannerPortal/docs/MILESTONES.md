@@ -1,4 +1,4 @@
-# Milestones y backlog
+﻿# Milestones y backlog
 
 Cada milestone se cierra por evidencia de aceptación, no por porcentaje de archivos escritos. Las estimaciones se definirán al medir volumen y acceso al tenant. Esta tabla es la fuente versionada del seguimiento; los milestones nativos de GitHub, cuando se creen, deben usar los mismos títulos.
 
@@ -69,3 +69,7 @@ Código revisable, pruebas pertinentes y evidencia enlazada; sin secretos ni dat
 ## Secuencia de validación integral
 
 El [plan de pruebas T00–T14](END-TO-END-TEST-PLAN.md) concreta SP1–SP6 para LocalMIPScanner 5.1, identidades, entrega y portal. SP7/SP8 permanecen posteriores al piloto.
+
+## Avance del piloto administrado (20 de noviembre de 2026)
+
+SP2/SP3 incorporan [enrolamiento con certificado público, perfiles versionados/asignados, runner PS5.1 y subida con verificación](MANAGED-ENDPOINTS.md). No se cierran: Graph/PnP y tarea requieren pruebas reales. El principal compartido no aísla emisores entre sí. UploadedVerified no es Accepted por un procesador central. SP4 (editor/reportes), integración de clasificación/etiquetado SDK al runner, SP7 y SP8 permanecen pendientes.

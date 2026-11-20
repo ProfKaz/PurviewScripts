@@ -1,6 +1,6 @@
 ﻿# Endpoint MIP Scanner
 
-Versión 1.2.0. Scanner Windows PowerShell 5.1, laboratorio MIP compartido y ScannerPortal bajo una sola carpeta.
+Versión 1.3.0. Scanner Windows PowerShell 5.1, laboratorio MIP compartido y ScannerPortal bajo una sola carpeta.
 
 ## Instalación única
 
@@ -21,6 +21,8 @@ Antes del merge, usa `-Ref feat/endpoint-unified-installer`. El instalador fija 
 | MipApp | Local y creación/reutilización de la app MIP, con logo local y login administrativo. |
 | Portal | Local y preparación administrativa de PS7.6.0/PnP3.2.0/Graph, app del portal con logo y sitio/bibliotecas/listas piloto. |
 | Publisher | Preparación del publicador para un sitio existente, certificado CurrentUser y grant por carpeta de registro. Sin elevación local; requiere autorización administrativa Entra/SharePoint durante el registro. Omite instalar/compilar el SDK. |
+| ControlPlane | Prepara la app de aplicación/certificados del portal, aprueba solicitudes públicas y publica/asigna perfiles. No instala SDK. |
+| ManagedEndpoint | Enrola la cuenta/equipo sin elevación; opcionalmente registra tarea Limited después de comprobar token y perfil. No instala SDK. |
 | All | Local, MipApp y Portal en orden. Solicita los datos faltantes en consola. |
 
 ```powershell
@@ -55,3 +57,5 @@ Las pruebas del scanner se ejecutan desde LocalMIPScanner.WinPS51. Recupera las 
 ## Permisos y carpetas por dispositivo
 
 La [preparación del publicador](ScannerPortal/docs/PUBLISHER-PREFLIGHT.md) usa el sitio existente y conserva el lote real pendiente mientras valida autenticación app-only, escritura/lectura con hash y aislamiento de carpeta.
+
+La administración central y el envío verificado del piloto se detallan en [Endpoints administrados](ScannerPortal/docs/MANAGED-ENDPOINTS.md). Las etapas nuevas son explícitas y no forman parte de All. No implican que ya exista un editor SPFx o un procesador central de aceptación.

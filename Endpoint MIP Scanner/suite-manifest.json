@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 1,
-  "SuiteVersion": "1.2.1",
+  "SuiteVersion": "1.3.0",
   "Project": "Endpoint MIP Scanner",
   "Bootstrap": "Install-EndpointMIPScanner.ps1",
   "Scripts": [
@@ -201,7 +201,7 @@
     },
     {
       "Path": "Install-EndpointMIPScanner.ps1",
-      "Version": "1.2.1",
+      "Version": "1.3.0",
       "TrackingId": "0576cc7a-692e-4876-bfe5-d1fb62a30116"
     },
     {
@@ -248,6 +248,41 @@
       "Path": "deployment/Initialize-ScannerPortalPublisher.ps1",
       "Version": "1.0.1",
       "TrackingId": "6fbce7f4-ce63-4e3b-b992-fc31301dca4d"
+    },
+    {
+      "Path": "ScannerPortal/src/ScannerPortal.Endpoint.psm1",
+      "Version": "1.0.0",
+      "TrackingId": "a0bd04b9-f8bf-44bf-93d2-de2a27099420"
+    },
+    {
+      "Path": "ScannerPortal/Invoke-ScannerPortalEndpoint.ps1",
+      "Version": "1.0.0",
+      "TrackingId": "cb3e6ef2-d589-4383-88f9-883caa438eaf"
+    },
+    {
+      "Path": "ScannerPortal/deployment/Install-ScannerPortalEndpoint.ps1",
+      "Version": "1.0.0",
+      "TrackingId": "ddfac335-a7c0-4110-aab4-540cc4eb826e"
+    },
+    {
+      "Path": "ScannerPortal/deployment/Set-ScannerPortalControlPlane.ps1",
+      "Version": "1.0.0",
+      "TrackingId": "a06d345c-ac61-4738-9f16-d75633017a48"
+    },
+    {
+      "Path": "ScannerPortal/tests/Test-ScannerPortalProfile.ps1",
+      "Version": "1.0.0",
+      "TrackingId": "c20e72b1-3c53-4506-a630-69f828670344"
+    },
+    {
+      "Path": "ScannerPortal/tests/Test-ManagedEndpoint.ps1",
+      "Version": "1.0.0",
+      "TrackingId": "b1bf5e35-7203-41f1-b81a-8bbd55039fe6"
+    },
+    {
+      "Path": "ScannerPortal/tests/Test-ControlPlane.ps1",
+      "Version": "1.0.0",
+      "TrackingId": "b5cacb4d-11bb-40e3-b8a1-b8f2d8e1ced"
     }
   ],
   "Dependencies": [
