@@ -72,3 +72,26 @@ Compartir WORK W02A PARA COMPARTIR. Complete=false o Issues no vacío significa 
 Las pruebas locales de W01 verifican archivos de estado ausentes/corruptos, extracción de IDs sin divulgar otros campos y manifiestos pendientes sin alterar payloads. No prueban autenticación ni permisos de SharePoint.
 
 Test-WorkEntraApplications prueba el alcance de lectura solicitado, peticiones GET, resolución de permisos efectivos frente a declaraciones y minimización de salida con Graph simulado. No se ejecutó login ni consulta del tenant por parte del agente.
+
+### W02A recibido y preparación W02B1
+
+El usuario confirmó W02A completo: existen Setup y MIP Lab, ambas sin permisos de aplicación efectivos y sin certificados registrados. Los scopes declarados siguen siendo de administración/MIP delegados; no acreditan acceso app-only para subir informes. Se preservan esas dos aplicaciones.
+
+Invoke-WorkSharedPublisher.ps1 es autónomo y separa dos operaciones:
+
+1. Prepare (W02B1): crea/reutiliza Kaz Demos Scanner Publisher - Work y su Service Principal, declara/consiente Lists.SelectedOperations.Selected y registra un único certificado público. El certificado privado se genera una sola vez en CurrentUser/My, sin ID por equipo. Se conserva la referencia en %LOCALAPPDATA%/EndpointMIPScanner/Work/SharedPublisher/publisher.json. Repetir en esa ubicación reutiliza app, certificado y concesión. Si existe la app sin estado local se requiere ClientId explícito; si hay claves desconocidas o permisos más amplios se detiene sin sustituir claves.
+2. Authenticate (W02B2): obtiene únicamente un token client_credentials con ese certificado, sin login administrativo. No devuelve el token ni hace peticiones a SPO. Se ejecutará después de revisar W02B1.
+
+Prepare solicita Application.Read.All, Application.ReadWrite.All y AppRoleAssignment.ReadWrite.All a la sesión administrativa de proceso. Estos permisos son para quien prepara, no para la aplicación del endpoint. No solicita Sites.FullControl.All ni necesita PortalClientId/PnP. Crear/consentir permisos de aplicación exige la autorización administrativa adecuada del tenant.
+
+Para el piloto de certificado único reutilizable, AllowCertificateExport permite exportación futura desde Windows, pero no exporta la clave ni crea un PFX. Sin el switch el certificado será no exportable y quedará para uso central en esa cuenta. Elegir la política en la primera ejecución: repetir no la cambia. No se implementa distribución a otros endpoints, descarga de claves desde SPO ni rotación masiva. Todos los consumidores futuros de esa clave actuarán como la misma app.
+
+```powershell
+& $adminPS -NoProfile -File '.\Invoke-WorkSharedPublisher.ps1' `
+    -Step Prepare -AllowCertificateExport `
+    -TenantId 'd88f1561-bdab-46f0-b8ba-bfca21e1b5c4'
+```
+
+Compartir WORK W02B PARA COMPARTIR con Test=W02B1-SharedPublisherPrepare. Todavía no se otorga permiso a biblioteca/carpeta: el consentimiento Selected por sí solo no autoriza acceso a contenido. Ni Prepare ni Authenticate acceden al lote existente, instalan el portal o cambian tareas. No ejecutar otro enrolamiento por estación.
+
+La prueba local Test-WorkSharedPublisher usa un certificado CurrentUser real con opción exportable explícita y transportes Graph/token simulados. Comprueba repetición sin duplicados, solo certificado público enviado, firma RSA verificable, autenticación separada de administración, salida sin token y rechazo de permisos inesperados antes de actualizar credenciales. No sustituye Prepare/Authenticate reales del tenant.
