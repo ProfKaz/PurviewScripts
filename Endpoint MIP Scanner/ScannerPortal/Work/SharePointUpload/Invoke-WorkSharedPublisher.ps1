@@ -1,36 +1,37 @@
 ﻿<#PSScriptInfo
-.VERSION 0.2.0
+.VERSION 0.3.0
 .GUID 93b41e48-1698-483c-9a57-986b9b387239
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-20 0.3.0 W04 synthetic marker upload, retry without overwrite and downloaded SHA-256 verification.
 2026-11-20 0.2.0 W03C app-only metadata reads and denied access to a known ungranted list.
 2026-11-20 0.1.0 W02B single pilot certificate/app preparation and separate app-only token test.
 #>
 <#
 .DESCRIPTION
-Standalone shared publisher pilot. Prepare changes only a dedicated Entra app/SP and a single CurrentUser certificate. Authenticate performs only token acquisition.
+Standalone shared publisher pilot. Prepare sets up the identity; Authenticate/TestAccess read only; UploadProbe writes only a generated synthetic marker.
 .NOTES
-Version     : 0.2.0
+Version     : 0.3.0
 Tracking ID : 93b41e48-1698-483c-9a57-986b9b387239
 #>
 #Requires -Version 7.4
 [CmdletBinding()]
 param([Parameter(Mandatory)][guid]$TenantId,
-    [ValidateSet('Prepare','Authenticate','TestAccess')][string]$Step='Authenticate',
+    [ValidateSet('Prepare','Authenticate','TestAccess','UploadProbe')][string]$Step='Authenticate',
     [string]$StateDirectory=(Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner/Work/SharedPublisher'),
     [guid]$ClientId=[guid]::Empty,
     [switch]$AllowCertificateExport,
     [string]$SiteId,[guid]$ListId=[guid]::Empty,[string]$DriveId,
-    [guid]$ControlListId=[guid]::Empty)
+    [guid]$ControlListId=[guid]::Empty,[guid]$ProbeId=[guid]::Empty)
 $ErrorActionPreference='Stop'
 if($TenantId -eq [guid]::Empty){throw 'Specify a tenant GUID.'}
-if($Step -eq 'TestAccess'){
+if($Step -in 'TestAccess','UploadProbe'){
     $siteParts=$SiteId.Split(',')
     if($siteParts.Count -ne 3 -or $siteParts[0] -notmatch '^[a-z0-9-]+\.sharepoint\.com$' -or
         [guid]$siteParts[1] -eq [guid]::Empty -or [guid]$siteParts[2] -eq [guid]::Empty -or
         $ListId -eq [guid]::Empty -or $ControlListId -eq [guid]::Empty -or $ControlListId -eq $ListId -or
-        $DriveId -notmatch '^[A-Za-z0-9_!.,-]{1,256}$'){throw 'TestAccess requires validated site/list/drive IDs and a different known-existing control list.'}
+        $DriveId -notmatch '^[A-Za-z0-9_!.,-]{1,256}$'){throw 'Access/probe steps require validated site/list/drive IDs and a different known-existing control list.'}
 }
 $StateDirectory=[IO.Path]::GetFullPath($StateDirectory)
 for($parent=[IO.DirectoryInfo]::new($StateDirectory);$parent;$parent=$parent.Parent){
@@ -63,6 +64,79 @@ function Shared-Pages([string]$Uri){
     }
 }
 function Shared-Base64Url([byte[]]$Bytes){[Convert]::ToBase64String($Bytes).TrimEnd('=').Replace('+','-').Replace('/','_')}
+function Shared-HttpStatus($ErrorRecord){
+    if($ErrorRecord.Exception.PSObject.Properties['ResponseStatusCode']){return [int]$ErrorRecord.Exception.ResponseStatusCode}
+    if($ErrorRecord.Exception.PSObject.Properties['Response'] -and $ErrorRecord.Exception.Response){return [int]$ErrorRecord.Exception.Response.StatusCode}
+    return 0
+}
+function Shared-ProbeFolder([string]$ParentId,[string]$Name,$Headers){
+    if($ParentId -notmatch '^[A-Za-z0-9_!.,-]{1,256}$' -or $Name -notmatch '^[a-z0-9-]{1,64}$'){throw 'Unsafe probe folder segment.'}
+    $uri="https://graph.microsoft.com/v1.0/drives/$DriveId/items/${ParentId}:/$Name"
+    try{$folder=Invoke-RestMethod -Uri $uri -Method GET -Headers $Headers}
+    catch{
+        if((Shared-HttpStatus $_) -ne 404){throw}
+        try{
+            $body=@{name=$Name;folder=@{};'@microsoft.graph.conflictBehavior'='fail'}|ConvertTo-Json -Compress
+            $folder=Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/drives/$DriveId/items/$ParentId/children" -Method POST -Headers $Headers -ContentType 'application/json' -Body $body
+            $script:ProbeFoldersCreated++
+        }catch{
+            if((Shared-HttpStatus $_) -ne 409){throw}
+            $folder=Invoke-RestMethod -Uri $uri -Method GET -Headers $Headers
+        }
+    }
+    if($null -eq $folder.folder -or $folder.name -ne $Name -or $folder.id -notmatch '^[A-Za-z0-9_!.,-]{1,256}$'){throw 'Probe path identifies an unexpected item.'}
+    return $folder
+}
+function Shared-ProbeUpload($Root,$List,$Headers){
+    if($ProbeId -eq [guid]::Empty){
+        if($state.lastProbeId){
+            if($state.lastProbeSiteId -ne $SiteId -or $state.lastProbeListId -ne $ListId.ToString() -or $state.lastProbeDriveId -cne $DriveId){throw 'Last probe belongs to another target; select an explicit new ProbeId.'}
+            $ProbeId=[guid]$state.lastProbeId
+        }else{$ProbeId=[guid]::NewGuid()}
+    }
+    if($ProbeId -eq [guid]::Empty){throw 'Invalid probe ID.'}
+    $state.lastProbeId=$ProbeId.ToString();$state.lastProbeSiteId=$SiteId;$state.lastProbeListId=$ListId.ToString();$state.lastProbeDriveId=$DriveId
+    Save-SharedState
+    $payload=[ordered]@{kind='SyntheticTransportProbe';probeId=$ProbeId.ToString();tenantId=$TenantId.ToString();clientId=$ClientId.ToString();message='Synthetic transport test. No endpoint inventory.'}
+    $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($payload|ConvertTo-Json -Compress))
+    $sha=[Security.Cryptography.SHA256]::Create()
+    try{$expected=[BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-','')}finally{$sha.Dispose()}
+    $script:ProbeFoldersCreated=0
+    $parent=$Root
+    foreach($segment in @('work-pilot','probes',$ProbeId.ToString('N'))){$parent=Shared-ProbeFolder $parent.id $segment $Headers}
+    $markerUri="https://graph.microsoft.com/v1.0/drives/$DriveId/items/$($parent.id):/marker.json"
+    $uploaded=$false;$exists=$true
+    try{$marker=Invoke-RestMethod -Uri $markerUri -Method GET -Headers $Headers}
+    catch{if((Shared-HttpStatus $_) -ne 404){throw};$exists=$false}
+    if(-not $exists){
+        try{
+            $null=Invoke-RestMethod -Uri ($markerUri+':/content?@microsoft.graph.conflictBehavior=fail') -Method PUT -Headers $Headers -ContentType 'application/json' -Body $bytes
+            $uploaded=$true
+        }catch{if((Shared-HttpStatus $_) -ne 409){throw}}
+        $marker=Invoke-RestMethod -Uri $markerUri -Method GET -Headers $Headers
+    }
+    if(-not $marker.id -or $null -eq $marker.file -or $marker.name -ne 'marker.json' -or [long]$marker.size -ne $bytes.Length){throw 'Unexpected remote marker metadata; no overwrite or deletion.'}
+    if($marker.parentReference.id -and $marker.parentReference.id -cne $parent.id){throw 'Marker identifies another parent folder.'}
+    $url=[uri]$marker.'@microsoft.graph.downloadUrl'
+    if(-not $url.IsAbsoluteUri -or $url.Scheme -ne 'https' -or $url.UserInfo -or -not $url.IsDefaultPort){throw 'Invalid preauthenticated download URL.'}
+    $temp=Join-Path $StateDirectory ('probe-download-'+[guid]::NewGuid().ToString('N')+'.tmp')
+    try{
+        # The Graph bearer token must not be sent to this preauthenticated URL.
+        try{$null=Invoke-WebRequest -Uri $url.AbsoluteUri -Method GET -OutFile $temp -MaximumRedirection 5 -TimeoutSec 30}
+        catch{throw 'Marker download failed; preauthenticated URL omitted.'}
+        if((Get-Item -LiteralPath $temp).Length -ne $bytes.Length){throw 'Downloaded marker length mismatch; remote marker preserved.'}
+        $actual=(Get-FileHash -LiteralPath $temp -Algorithm SHA256).Hash
+        if($actual -cne $expected){throw 'Downloaded marker SHA-256 mismatch; remote marker preserved.'}
+    }finally{if([IO.File]::Exists($temp)){[IO.File]::Delete($temp)}}
+    $relative='work-pilot/probes/'+$ProbeId.ToString('N')+'/marker.json'
+    [ordered]@{Test='W04-SyntheticUpload';Version='0.3.0';Outcome='Verified';Authentication='CertificateAppOnly'
+        TenantId=$TenantId.ToString();ClientId=$ClientId.ToString();ListId=$ListId.ToString();DriveId=$DriveId
+        ProbeId=$ProbeId.ToString();RelativePath=$relative;MarkerItemId=$marker.id;MarkerWebUrl=($List.webUrl.TrimEnd('/')+'/'+$relative)
+        MarkerBytes=$bytes.Length;ExpectedSha256=$expected;DownloadedSha256=$actual;DownloadHashVerified=$true
+        MarkerUploadedThisRun=$uploaded;FoldersCreatedThisRun=$script:ProbeFoldersCreated;RemoteMarkerPreserved=$true
+        RealBatchRead=$false;RealBatchUploaded=$false;CertificatesCreated=0;AdministrativeLoginUsed=$false;TokenReturnedToConsole=$false
+        OrdinaryUserAclReviewed=$false}
+}
 try{
     $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     if(Test-Path -LiteralPath $statePath){
@@ -149,7 +223,7 @@ try{
             $result=[ordered]@{Test='W02B2-CertificateAuthentication';Outcome='TokenAcquired';Authentication='CertificateAppOnly'
                 TenantId=$TenantId.ToString();ClientId=$ClientId.ToString();CertificateThumbprint=$cert.Thumbprint
                 TokenReturnedToConsole=$false;ExpiresInSeconds=$response.expires_in;SharePointAccessTested=$false;FilesUploaded=0}
-            if($Step -eq 'TestAccess'){
+            if($Step -in 'TestAccess','UploadProbe'){
                 $headers=@{Authorization='Bearer '+$response.access_token}
                 try{
                     $list=Invoke-RestMethod -Uri ("https://graph.microsoft.com/v1.0/sites/$SiteId/lists/$ListId"+'?$select=id,displayName,webUrl,list') -Method GET -Headers $headers
@@ -176,11 +250,13 @@ try{
                         ControlListId=$ControlListId.ToString();ControlReadDenied=$denied;ControlStatusCode=$negativeStatus
                         ControlExistenceVerifiedByThisScript=$false;WriteAccessTested=$false;OrdinaryUserAclReviewed=$false
                         AdministrativeLoginUsed=$false;TokenReturnedToConsole=$false;SharePointChanged=$false;CertificatesCreated=0;FilesUploaded=0}
+                    if($Step -eq 'UploadProbe'){$result=Shared-ProbeUpload $root $list $headers}
                 }finally{$headers.Clear()}
             }
         }finally{$form.Clear();$assertion=$null;$response=$null}
     }
-    Write-Host '=== WORK W02B PARA COMPARTIR ===' -ForegroundColor Magenta
+    $headline=if($Step -eq 'UploadProbe'){'=== WORK W04 PARA COMPARTIR ==='}else{'=== WORK W02B PARA COMPARTIR ==='}
+    Write-Host $headline -ForegroundColor Magenta
     Write-Host ($result|ConvertTo-Json -Depth 6) -ForegroundColor Magenta
     [pscustomobject]$result
 }finally{if($connected){Disconnect-MgGraph -ErrorAction SilentlyContinue|Out-Null};$lock.Dispose()}

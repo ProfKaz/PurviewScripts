@@ -27,7 +27,7 @@ No distribuir todavía un PFX ni crear certificados nuevos. Primero comprobar lo
 | W03A | Resolver sitio/biblioteca e inspeccionar grants de aplicación, solo lectura administrativa | Script implementado; tenant pendiente |
 | W03B | Conceder write seleccionado sobre la biblioteca identificada y verificar por lectura | Script implementado; tenant pendiente |
 | W03C | Leer metadatos del destino con el certificado y comprobar denegación en Config | Implementado como TestAccess; tenant pendiente |
-| W04 | Crear una carpeta de piloto y subir un marcador sintético; descargar/verificar hash | Pendiente |
+| W04 | Crear carpeta de piloto y subir marcador sintético; descargar/verificar SHA-256 | Implementado como UploadProbe; tenant pendiente |
 | W05 | Verificar y subir una copia del lote real existente, manifiesto al final y reintento | Pendiente |
 | W06 | Repetición, desconexión, otra estación, rendimiento y rotación/revocación | Pendiente |
 
@@ -157,3 +157,28 @@ Luego intenta leer metadatos de ScannerPortalConfig, cuyo ListId y existencia ya
 Compartir WORK W02B PARA COMPARTIR con Test=W03C-CertificateLibraryAccess. Outcome=Verified, LibraryReadVerified=true, DriveRootReadVerified=true y ControlReadDenied=true son los criterios. WriteAccessTested=false, OrdinaryUserAclReviewed=false y FilesUploaded=0 siguen siendo intencionales; la escritura se probará con un marcador sintético en W04.
 
 El test actualizado usa un certificado real temporal y transportes simulados. Verifica ambas lecturas app-only, denegación 403/404 y rechazo de 200/401/500/fallo de red y de una raíz de otra biblioteca, sin conexión administrativa para esta ruta. No se hicieron llamadas al tenant por parte del agente. [Los permisos seleccionados se aplican al recurso independientemente de usar rutas sites/lists o drives/items](https://learn.microsoft.com/en-us/graph/permissions-selected-overview).
+
+### W03C recibido y siguiente W04
+
+El usuario confirmó lectura de lista y raíz por CertificateAppOnly, junto a 403 en Config, sin login administrativo ni cambios en SharePoint. Este es el primer acceso efectivo del publicador validado en el tenant. La escritura todavía no está probada.
+
+Invoke-WorkSharedPublisher.ps1 0.3.0 añade Step=UploadProbe. Antes de escribir repite las comprobaciones de W03C. Crea/reutiliza work-pilot/probes/ProbeId/marker.json en Landing. El marcador se genera en memoria con datos sintéticos y los IDs públicos de tenant/app; no incluye documentos, contenido del inventario, usuario o rutas locales. No toca Outbox ni sus archivos.
+
+El ProbeId se guarda antes de la primera escritura remota y queda vinculado al sitio/lista/drive en el estado local Work. Repetir sin ProbeId reutiliza el último para recuperarse de una caída. El contenido es determinista para ese ID. No hay un certificado por prueba/equipo ni un nuevo principal. Para una prueba nueva se puede indicar ProbeId explícito.
+
+Las carpetas se crean con conflictBehavior=fail y solo se reutilizan si son carpetas con el nombre esperado. La carga de marker.json usa conflictBehavior=fail en la URL, nunca replace/rename. Un marcador existente se descarga y compara; si tiene tamaño/hash distinto la prueba falla sin sobrescribirlo. 409 por concurrencia provoca lectura, no reemplazo. Si el servidor escribió pero se perdió la respuesta, el siguiente intento encuentra y verifica el mismo marcador.
+
+La descarga usa el URL preautenticado obtenido de Graph, sin enviarle el bearer token ni mostrar ese URL. Descarga el pequeño marcador a un temporal local, compara SHA-256 y elimina solo ese temporal. Conserva la carpeta y el marcador remotos para inspección; no hay operaciones DELETE ni borrado de evidencias. El token y la clave privada no se devuelven a consola.
+
+```powershell
+& $adminPS -NoProfile -File '.\Invoke-WorkSharedPublisher.ps1' `
+    -Step UploadProbe -TenantId 'd88f1561-bdab-46f0-b8ba-bfca21e1b5c4' `
+    -SiteId 'mhcybersecuritydemos.sharepoint.com,0db65add-dc82-47f0-89a1-7a4818ee9a75,d194e373-f508-463a-8c6c-a40120c689a2' `
+    -ListId '0e82d3f5-3357-4f05-b604-049e13fb9491' `
+    -DriveId 'b!3Vq2DYLc8EeJoXpIGO6adXPjlNEI9TpGjGykASDGiaL104IOVzMFT7YEBJ4T-5SR' `
+    -ControlListId '55f058e7-5798-42b9-9bbb-e0d8edf78a7f'
+```
+
+Compartir WORK W04 PARA COMPARTIR. Outcome=Verified, DownloadHashVerified=true y hashes iguales son los criterios. MarkerUploadedThisRun es true solo si la escritura se confirmó en ese intento; puede ser false en una recuperación verificada. RealBatchRead=false y RealBatchUploaded=false siguen siendo obligatorios. MarkerWebUrl permite revisar el marcador desde el navegador con acceso normal autorizado. Esto no prueba ACL de usuarios ni custodia central; antes de W05 real sigue pendiente esa revisión.
+
+La prueba local usa un certificado real temporal con HTTP simulado: primera carga y descarga, pérdida de respuesta después de escribir, repetición sin duplicados, archivo ocupando una ruta de carpeta, descarga corrupta y falta de bearer en el cliente de descarga. No se subió ningún archivo real al tenant por parte del agente. Referencias: [conflictBehavior en URL](https://learn.microsoft.com/en-us/graph/api/resources/driveitem?view=graph-rest-1.0), [descargas preautenticadas sin Authorization](https://learn.microsoft.com/en-us/graph/api/driveitem-get-content?view=graph-rest-1.0).
