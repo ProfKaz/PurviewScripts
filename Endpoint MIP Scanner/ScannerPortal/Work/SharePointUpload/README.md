@@ -22,7 +22,8 @@ No distribuir todavía un PFX ni crear certificados nuevos. Primero comprobar lo
 | Prueba | Acción | Estado |
 | --- | --- | --- |
 | W01 | Inventario local: IDs públicos guardados, certificados existentes del scanner y lotes pendientes | Script implementado; sin acceso de red |
-| W02 | Obtener un token con la identidad elegida; sin crear carpetas ni cargar archivos | Pendiente de revisar W01 y decidir ubicación de credencial |
+| W02A | Consultar aplicaciones y permisos existentes en Entra con acceso administrativo de lectura | Script implementado; validación del tenant pendiente |
+| W02B | Obtener un token con la identidad de carga elegida; sin crear carpetas ni cargar archivos | Pendiente de revisar W02A y decidir ubicación de credencial |
 | W03 | Resolver sitio/biblioteca existentes y comprobar permisos | Pendiente |
 | W04 | Crear una carpeta de piloto y subir un marcador sintético; descargar/verificar hash | Pendiente |
 | W05 | Verificar y subir una copia del lote real existente, manifiesto al final y reintento | Pendiente |
@@ -46,8 +47,28 @@ Busca las dos colas Pending conocidas sin recorrer documentos ni crear lotes. Ca
 
 ## Fuentes y validación
 
+### W01 recibido y siguiente prueba W02A
+
+El usuario confirmó W01 en PS5.1 x64 sin elevación: un lote Sealed existente, hash de manifiesto consistente con la prueba previa, ningún certificado del scanner encontrado y ningún archivo de estado local de las tres apps. Esto no demuestra ausencia de aplicaciones en Entra ni verifica todavía los payloads.
+
+Get-WorkEntraApplications.ps1 consulta las aplicaciones del tenant y selecciona nombres scanner/localmip/purview/Kaz Demos, más KnownClientId explícitos. Solo usa GET: resuelve permisos declarados (Role o Scope) y concesiones efectivas de aplicación del Service Principal. No confundir scopes declarados con consentimiento delegado efectivo, ni un permiso Selected con un grant sobre una biblioteca.
+
+Se ejecuta en el PS7 administrativo portátil ya descargado, no cambia el runtime PS5.1 del scanner. Usa únicamente Microsoft.Graph.Authentication; si falta, lo instala para CurrentUser. El login administrativo solicita Application.Read.All con contexto de proceso. Puede requerir consentimiento de lectura; no solicita escritura de aplicaciones ni Sites.FullControl.All. No genera certificados ni importa claves, no lee contraseñas, no accede a SPO y no prueba autenticación app-only. Solo expone IDs, nombres, permisos y metadatos públicos de certificados; nunca su blob ni tokens. El campo KnownClientIdsWithoutLocalAppRegistration se refiere a app registrations locales, no prueba inexistencia de un enterprise application externo.
+
+```powershell
+$adminPS = Join-Path 'C:\Deploy\Endpoint MIP Scanner' '.endpoint-install\powershell-7.6.0\pwsh.exe'
+& $adminPS -NoProfile -File '.\Get-WorkEntraApplications.ps1' `
+    -TenantId 'd88f1561-bdab-46f0-b8ba-bfca21e1b5c4' `
+    -KnownClientId 'a0e89d29-a20a-45af-8971-54fd03a25dac'
+```
+
+Compartir WORK W02A PARA COMPARTIR. Complete=false o Issues no vacío significa consulta parcial; no interpretar como ausencia de permisos. Después se decide si crear/reutilizar una app dedicada y dónde residirá el certificado único. La prueba de autenticación del publicador sigue siendo W02B.
+
 - [Identidades administradas: recursos compatibles](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/managed-identities-status).
 - [Permisos delegados y de aplicación](https://learn.microsoft.com/en-us/graph/permissions-overview).
 - [Carga de archivos Graph](https://learn.microsoft.com/en-us/graph/api/driveitem-put-content).
+- [Lectura de appRoleAssignments y permisos requeridos](https://learn.microsoft.com/en-us/graph/api/serviceprincipal-list-approleassignments?view=graph-rest-1.0).
 
 Las pruebas locales de W01 verifican archivos de estado ausentes/corruptos, extracción de IDs sin divulgar otros campos y manifiestos pendientes sin alterar payloads. No prueban autenticación ni permisos de SharePoint.
+
+Test-WorkEntraApplications prueba el alcance de lectura solicitado, peticiones GET, resolución de permisos efectivos frente a declaraciones y minimización de salida con Graph simulado. No se ejecutó login ni consulta del tenant por parte del agente.

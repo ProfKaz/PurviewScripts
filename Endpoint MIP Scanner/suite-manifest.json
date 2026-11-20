@@ -293,6 +293,16 @@
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkUploadInventory.ps1",
       "Version": "0.1.0",
       "TrackingId": "a84b3dbb-abce-40da-9fbf-c398f59568e8"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Get-WorkEntraApplications.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "49b41718-3711-4773-aed5-10ae37b1cf9f"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkEntraApplications.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "982e1cb5-74b5-4ae0-b619-6dba8f13bc2b"
     }
   ],
   "Dependencies": [
