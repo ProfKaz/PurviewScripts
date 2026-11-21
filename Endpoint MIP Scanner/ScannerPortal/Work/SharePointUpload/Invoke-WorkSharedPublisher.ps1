@@ -1,9 +1,10 @@
 ﻿<#PSScriptInfo
-.VERSION 0.3.0
+.VERSION 0.4.0
 .GUID 93b41e48-1698-483c-9a57-986b9b387239
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-20 0.4.0 Prepare an empty per-device/per-batch target before ACL review; no real payload reads/uploads.
 2026-11-20 0.3.0 W04 synthetic marker upload, retry without overwrite and downloaded SHA-256 verification.
 2026-11-20 0.2.0 W03C app-only metadata reads and denied access to a known ungranted list.
 2026-11-20 0.1.0 W02B single pilot certificate/app preparation and separate app-only token test.
@@ -12,21 +13,23 @@
 .DESCRIPTION
 Standalone shared publisher pilot. Prepare sets up the identity; Authenticate/TestAccess read only; UploadProbe writes only a generated synthetic marker.
 .NOTES
-Version     : 0.3.0
+Version     : 0.4.0
 Tracking ID : 93b41e48-1698-483c-9a57-986b9b387239
 #>
 #Requires -Version 7.4
 [CmdletBinding()]
 param([Parameter(Mandatory)][guid]$TenantId,
-    [ValidateSet('Prepare','Authenticate','TestAccess','UploadProbe')][string]$Step='Authenticate',
+    [ValidateSet('Prepare','Authenticate','TestAccess','UploadProbe','PrepareBatchTarget')][string]$Step='Authenticate',
     [string]$StateDirectory=(Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner/Work/SharedPublisher'),
     [guid]$ClientId=[guid]::Empty,
     [switch]$AllowCertificateExport,
     [string]$SiteId,[guid]$ListId=[guid]::Empty,[string]$DriveId,
-    [guid]$ControlListId=[guid]::Empty,[guid]$ProbeId=[guid]::Empty)
+    [guid]$ControlListId=[guid]::Empty,[guid]$ProbeId=[guid]::Empty,
+    [string]$BatchId,[string]$ExpectedManifestSha256)
 $ErrorActionPreference='Stop'
 if($TenantId -eq [guid]::Empty){throw 'Specify a tenant GUID.'}
-if($Step -in 'TestAccess','UploadProbe'){
+if($Step -eq 'PrepareBatchTarget' -and ($BatchId -cnotmatch '^[A-F0-9]{64}$' -or $ExpectedManifestSha256 -cnotmatch '^[A-F0-9]{64}$')){throw 'Supply the exact verified uppercase batch ID and original manifest SHA-256.'}
+if($Step -in 'TestAccess','UploadProbe','PrepareBatchTarget'){
     $siteParts=$SiteId.Split(',')
     if($siteParts.Count -ne 3 -or $siteParts[0] -notmatch '^[a-z0-9-]+\.sharepoint\.com$' -or
         [guid]$siteParts[1] -eq [guid]::Empty -or [guid]$siteParts[2] -eq [guid]::Empty -or
@@ -137,6 +140,39 @@ function Shared-ProbeUpload($Root,$List,$Headers){
         RealBatchRead=$false;RealBatchUploaded=$false;CertificatesCreated=0;AdministrativeLoginUsed=$false;TokenReturnedToConsole=$false
         OrdinaryUserAclReviewed=$false}
 }
+function Shared-PrepareBatchTarget($Root,$List,$Headers){
+    if($state.reportingDeviceId){
+        if([guid]$state.reportingDeviceId -eq [guid]::Empty -or $state.reportingDeviceName -cne $env:COMPUTERNAME){throw 'Reporting identity differs from this computer. Do not copy device identity with the shared credential.'}
+        $deviceCreated=$false
+    }else{
+        $state.reportingDeviceId=[guid]::NewGuid().ToString();$state.reportingDeviceName=$env:COMPUTERNAME;$deviceCreated=$true
+    }
+    if($state.batchTarget -and $state.batchTarget.batchId -ceq $BatchId){
+        if($state.batchTarget.expectedManifestSha256 -cne $ExpectedManifestSha256 -or $state.batchTarget.siteId -ne $SiteId -or
+            $state.batchTarget.listId -ne $ListId.ToString() -or $state.batchTarget.driveId -cne $DriveId){throw 'Saved batch/manifest/target binding differs; no automatic retargeting.'}
+    }
+    $segments=@('work-pilot','devices',([guid]$state.reportingDeviceId).ToString('N'),'batches',$BatchId.ToLowerInvariant())
+    $relative=$segments -join '/'
+    $state.batchTarget=@{batchId=$BatchId;expectedManifestSha256=$ExpectedManifestSha256;siteId=$SiteId;listId=$ListId.ToString()
+        driveId=$DriveId;relativePath=$relative;deviceId=$state.reportingDeviceId;status='Preparing'}
+    Save-SharedState
+    $script:ProbeFoldersCreated=0;$parent=$Root
+    foreach($segment in $segments){$parent=Shared-ProbeFolder $parent.id $segment $Headers}
+    $children=Invoke-RestMethod -Uri ("https://graph.microsoft.com/v1.0/drives/$DriveId/items/$($parent.id)/children"+'?$select=id,name&$top=1') -Method GET -Headers $Headers
+    if($children.value -isnot [Collections.IList]){throw 'Unexpected folder-children response; cannot confirm empty target.'}
+    $empty=(@($children.value).Count -eq 0 -and -not $children.'@odata.nextLink')
+    $state.batchTarget.folderItemId=$parent.id;$state.batchTarget.emptyAtPreparation=$empty
+    $state.batchTarget.status=if($empty){'AwaitingTargetAclReview'}else{'ExistingTargetNotEmpty'}
+    Save-SharedState
+    [ordered]@{Test='W05D-PrepareBatchTarget';Version='0.4.0';Outcome=if($empty){'TargetPreparedEmpty'}else{'ExistingTargetNotEmpty'}
+        Authentication='CertificateAppOnly';TenantId=$TenantId.ToString();ClientId=$ClientId.ToString();ListId=$ListId.ToString();DriveId=$DriveId
+        BatchId=$BatchId;ExpectedManifestSha256=$ExpectedManifestSha256;ReportingDeviceId=$state.reportingDeviceId;DeviceName=$env:COMPUTERNAME
+        DeviceIdentityOrigin='LocalPersistentGuid';DeviceIdentityCreatedThisRun=$deviceCreated;TargetRelativePath=$relative
+        TargetItemId=$parent.id;TargetWebUrl=($List.webUrl.TrimEnd('/')+'/'+$relative);TargetEmpty=$empty
+        FoldersCreatedThisRun=$script:ProbeFoldersCreated;TargetFolderAclReviewed=$false;ReadyForRealUpload=$false
+        LocalBatchVerifiedByThisStep=$false;RealBatchRead=$false;RealBatchUploaded=$false;FilesUploaded=0;CertificatesCreated=0
+        AdministrativeLoginUsed=$false;TokenReturnedToConsole=$false}
+}
 try{
     $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     if(Test-Path -LiteralPath $statePath){
@@ -223,7 +259,7 @@ try{
             $result=[ordered]@{Test='W02B2-CertificateAuthentication';Outcome='TokenAcquired';Authentication='CertificateAppOnly'
                 TenantId=$TenantId.ToString();ClientId=$ClientId.ToString();CertificateThumbprint=$cert.Thumbprint
                 TokenReturnedToConsole=$false;ExpiresInSeconds=$response.expires_in;SharePointAccessTested=$false;FilesUploaded=0}
-            if($Step -in 'TestAccess','UploadProbe'){
+            if($Step -in 'TestAccess','UploadProbe','PrepareBatchTarget'){
                 $headers=@{Authorization='Bearer '+$response.access_token}
                 try{
                     $list=Invoke-RestMethod -Uri ("https://graph.microsoft.com/v1.0/sites/$SiteId/lists/$ListId"+'?$select=id,displayName,webUrl,list') -Method GET -Headers $headers
@@ -251,11 +287,12 @@ try{
                         ControlExistenceVerifiedByThisScript=$false;WriteAccessTested=$false;OrdinaryUserAclReviewed=$false
                         AdministrativeLoginUsed=$false;TokenReturnedToConsole=$false;SharePointChanged=$false;CertificatesCreated=0;FilesUploaded=0}
                     if($Step -eq 'UploadProbe'){$result=Shared-ProbeUpload $root $list $headers}
+                    if($Step -eq 'PrepareBatchTarget'){$result=Shared-PrepareBatchTarget $root $list $headers}
                 }finally{$headers.Clear()}
             }
         }finally{$form.Clear();$assertion=$null;$response=$null}
     }
-    $headline=if($Step -eq 'UploadProbe'){'=== WORK W04 PARA COMPARTIR ==='}else{'=== WORK W02B PARA COMPARTIR ==='}
+    $headline=if($Step -eq 'PrepareBatchTarget'){'=== WORK W05D PARA COMPARTIR ==='}elseif($Step -eq 'UploadProbe'){'=== WORK W04 PARA COMPARTIR ==='}else{'=== WORK W02B PARA COMPARTIR ==='}
     Write-Host $headline -ForegroundColor Magenta
     Write-Host ($result|ConvertTo-Json -Depth 6) -ForegroundColor Magenta
     [pscustomobject]$result

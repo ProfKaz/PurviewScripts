@@ -1,10 +1,10 @@
 ﻿<#PSScriptInfo
-.VERSION 0.3.0
+.VERSION 0.4.0
 .GUID 382fa9db-fd14-4903-b3c6-19bf35d4be2a
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
-2026-11-20 0.3.0 Synthetic marker, safe retry after disconnect, existing path conflict and corrupt-download tests.
+2026-11-20 0.4.0 Synthetic marker, safe retry after disconnect, existing path conflict and corrupt-download tests.
 2026-11-20 0.2.0 App-only library/root reads, control denial and failure-boundary tests.
 2026-11-20 0.1.0 Real single-certificate lifecycle and signed assertion with mocked directory/token transport.
 #>
@@ -12,7 +12,7 @@
 .DESCRIPTION
 Offline shared publisher tests. Uses a temporary CurrentUser certificate; no tenant or SharePoint calls.
 .NOTES
-Version     : 0.3.0
+Version     : 0.4.0
 Tracking ID : 382fa9db-fd14-4903-b3c6-19bf35d4be2a
 #>
 #Requires -Version 7.4
@@ -83,6 +83,7 @@ function Invoke-RestMethod{param($Uri,$Method,$ContentType,$Body,$Headers)
     $f=$global:SharedWorkFixture
     if($Uri.StartsWith('https://graph.microsoft.com/v1.0/drives/')){
         if($Headers.Authorization -ne 'Bearer DO-NOT-SHARE-TOKEN'){throw 'Missing graph authorization.'}
+        if($Method -eq 'GET' -and $Uri -match '/children\?'){return @{value=@()}}
         if($Method -eq 'POST' -and $Uri -match '/items/([^/]+)/children$'){
             $parent=$Matches[1];$folder=$Body|ConvertFrom-Json -AsHashtable
             if(-not $folder.ContainsKey('folder') -or $folder.'@microsoft.graph.conflictBehavior' -ne 'fail'){throw 'Unsafe folder create.'}
@@ -189,6 +190,14 @@ try{
     $global:SharedWorkFixture.CorruptDownload=$false;$global:SharedWorkFixture.MarkerBytes=$null;$access.ProbeId=[guid]::NewGuid()
     $fresh=& $scriptPath @access
     Assert ($fresh.MarkerUploadedThisRun -and $fresh.DownloadHashVerified -and $fresh.ProbeId -ne $marker.ProbeId -and $global:SharedWorkFixture.FilePuts -eq 2) 'Explicit new probe failed the first-upload happy path.'
+    $access.Step='PrepareBatchTarget';$access.Remove('ProbeId');$access.BatchId=('A'*64);$access.ExpectedManifestSha256=('B'*64)
+    $target=& $scriptPath @access
+    $repeat=& $scriptPath @access
+    Assert ($target.TargetEmpty -and $target.Outcome -eq 'TargetPreparedEmpty' -and -not $target.ReadyForRealUpload -and -not $target.RealBatchRead) 'Target preparation claimed upload readiness or read real data.'
+    Assert ($repeat.TargetRelativePath -ceq $target.TargetRelativePath -and $repeat.ReportingDeviceId -eq $target.ReportingDeviceId -and $repeat.FoldersCreatedThisRun -eq 0 -and $global:SharedWorkFixture.FilePuts -eq 2) 'Target repeat duplicated identity/folders or uploaded files.'
+    $access.ExpectedManifestSha256=('C'*64)
+    $rejected=$false;try{& $scriptPath @access|Out-Null}catch{$rejected=$true}
+    Assert $rejected 'Changed manifest binding accepted.'
     $global:SharedWorkFixture.Grants+=@{resourceId=[guid]::NewGuid().ToString();appRoleId=[guid]::NewGuid().ToString()}
     $rejected=$false;try{& $scriptPath -Step Prepare -TenantId $global:SharedWorkFixture.Tenant -StateDirectory $fixture|Out-Null}catch{$rejected=$true}
     Assert ($rejected -and $global:SharedWorkFixture.KeyWrites -eq 1) 'Unexpected effective permissions were not rejected before credential update.'
