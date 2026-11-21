@@ -1,33 +1,47 @@
 <#PSScriptInfo
-.VERSION 0.1.0
+.VERSION 0.2.0
 .GUID d8a2a089-3acf-437a-972a-621e62bc2fd6
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-21 0.2.0 Central acceptance lost-response/repeat, conflict and unsafe ACL tests.
 2026-11-21 0.1.0 Mock PnP transport, real Windows PowerShell contract verifier, repeat and corruption tests.
 #>
 <#
 .NOTES
-Version     : 0.1.0
+Version     : 0.2.0
 Tracking ID : d8a2a089-3acf-437a-972a-621e62bc2fd6
 #>
 #Requires -Version 7.4
 $ErrorActionPreference='Stop'
 $fixture=Join-Path $env:TEMP ('ReceiverTest-'+[guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($fixture)
-$global:ReceiverFixture=@{Directory=$fixture;Tenant=[guid]::NewGuid();List=[guid]::NewGuid();BadDownload=$false}
+$global:ReceiverFixture=@{Directory=$fixture;Tenant=[guid]::NewGuid();List=[guid]::NewGuid();BadDownload=$false;Item=$null}
 function Get-Module{param($ListAvailable,$Name) [pscustomobject]@{Version=[version]'3.2.0'}}
 function Import-Module{param($Name,$RequiredVersion)}
 function Connect-PnPOnline{param($Url,$Tenant,$ClientId,[switch]$Interactive,[switch]$ReturnConnection) 'fixture'}
 function Disconnect-PnPOnline{param($ErrorAction)}
 function Get-PnPWeb{param($Includes,$Connection) @{Url='https://example.sharepoint.com/sites/Pilot'}}
-function Get-PnPList{param($Identity,$Includes,$Connection) @{Id=$global:ReceiverFixture.List;Title='ScannerPortalLanding';BaseTemplate=101}}
-function Get-PnPProperty{param($ClientObject,$Property,$Connection) if($Property -eq 'RootFolder'){@{ServerRelativeUrl='/sites/Pilot/ScannerPortalLanding'}}}
+function Get-PnPList{param($Identity,$Includes,$Connection)
+ if($Identity -eq $global:ReceiverFixture.AcceptanceList){return [pscustomobject]@{Id=$Identity;Title='ScannerPortalAcceptance';BaseTemplate=100;HasUniqueRoleAssignments=$true;RoleAssignments=@([pscustomobject]@{Member=[pscustomobject]@{LoginName=$(if($global:ReceiverFixture.BadAcl){'other'}else{'admin'})};RoleDefinitionBindings=@([pscustomobject]@{RoleTypeKind=5})})}}
+ @{Id=$global:ReceiverFixture.List;Title='ScannerPortalLanding';BaseTemplate=101}}
+function Get-PnPProperty{param($ClientObject,$Property,$Connection) if($Property -eq 'Member'){return $ClientObject.Member};if($Property -eq 'RootFolder'){@{ServerRelativeUrl='/sites/Pilot/ScannerPortalLanding'}}}
 function Get-PnPFile{param($Url,[switch]$AsListItem,$Connection,$Path,$FileName,[switch]$AsFile)
  $name=($Url -split '/')[-1];$source=Join-Path $global:ReceiverFixture.Directory $name
  if($AsListItem){return @{File_x0020_Size=(Get-Item $source).Length}}
  [IO.File]::Copy($source,(Join-Path $Path $FileName))
  if($global:ReceiverFixture.BadDownload -and $name -eq 'records.jsonl'){[IO.File]::WriteAllText((Join-Path $Path $FileName),'corrupt')}
+}
+function Get-PnPSiteCollectionAdmin{param($Connection) @{LoginName='admin'}}
+function Get-PnPField{param($List,$Identity,$Connection)
+ if($Identity -eq 'Title'){return @{Indexed=$true;EnforceUniqueValues=$true;Required=$true}}
+ @{TypeAsString='Note';RichText=$false;AppendOnly=$false}
+}
+function Get-PnPListItem{param($List,$Query,$Connection) if($global:ReceiverFixture.Item){$global:ReceiverFixture.Item}}
+function Add-PnPListItem{param($List,$Values,$Connection)
+ $global:ReceiverFixture.Creates++;$global:ReceiverFixture.Item=$Values.Clone();$global:ReceiverFixture.Item.Id=42
+ if($global:ReceiverFixture.LostResponse){throw 'Response lost'}
+ $global:ReceiverFixture.Item
 }
 function Assert($Condition,$Message){if(-not $Condition){throw $Message}}
 try{
@@ -53,8 +67,19 @@ try{
  $global:ReceiverFixture.BadDownload=$false;$common.ExpectedManifestSha256=('F'*64);$rejected=$false
  try{& $scriptPath @common|Out-Null}catch{$rejected=$true}
  Assert $rejected 'Wrong original manifest accepted.'
+ $common.ExpectedManifestSha256=(Get-FileHash (Join-Path $fixture 'manifest.json')).Hash
+ $common.PublishAcceptance=$true;$common.AcceptanceListId=[guid]::NewGuid();$common.AcknowledgePublisherDenied=$true
+ $global:ReceiverFixture.AcceptanceList=$common.AcceptanceListId;$global:ReceiverFixture.Creates=0;$global:ReceiverFixture.LostResponse=$true
+ $accepted=& $scriptPath @common
+ $repeat=& $scriptPath @common
+ Assert ($accepted.Outcome -eq 'Accepted' -and $accepted.CentralAcceptancePublished -and $accepted.CentralAcceptance.CreateResponseUncertain -and $repeat.CentralAcceptance.AcceptanceItemId -eq 42 -and $global:ReceiverFixture.Creates -eq 1 -and -not $repeat.CentralAcceptance.AcceptanceCreatedThisRun) 'Acceptance lost-response recovery/repeat failed.'
+ $global:ReceiverFixture.Item.ManifestSha256=('F'*64);$rejected=$false
+ try{& $scriptPath @common|Out-Null}catch{$rejected=$true};Assert $rejected 'Conflicting existing acceptance accepted.'
+ $global:ReceiverFixture.Item.ManifestSha256=$common.ExpectedManifestSha256;$global:ReceiverFixture.BadAcl=$true;$rejected=$false
+ try{& $scriptPath @common|Out-Null}catch{$rejected=$true};Assert $rejected 'Unsafe central ACL accepted.'
+ Assert ($global:ReceiverFixture.Creates -eq 1) 'Conflict/ACL test rewrote acceptance.'
  Assert (@(Get-ChildItem (Join-Path $fixture 'state') -Directory -Filter 'download-*').Count -eq 0) 'Downloaded evidence left behind.'
- 'PASS: mocked PnP download; actual PS5.1 identity/payload/summary verification; local dedup, corruption/hash rejection and cleanup; no remote writes'
+ 'PASS: mocked PnP download; actual PS5.1 identity/payload/summary verification; local dedup, corruption/hash rejection and cleanup; mocked acceptance create/readback, lost-response recovery, dedup, conflict and unsafe ACL rejection'
 }finally{
  $safe=[IO.Path]::GetFullPath($fixture)
  if(-not $safe.StartsWith([IO.Path]::GetFullPath($env:TEMP).TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe fixture cleanup.'}
