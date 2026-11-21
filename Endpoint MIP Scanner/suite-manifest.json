@@ -346,12 +346,12 @@
     },
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkPortalReception.ps1",
-      "Version": "0.2.0",
+      "Version": "0.3.0",
       "TrackingId": "9db4ac4a-f2e7-4fd6-9413-1557d38fb74f"
     },
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkPortalReceptionOffline.ps1",
-      "Version": "0.2.0",
+      "Version": "0.3.0",
       "TrackingId": "d8a2a089-3acf-437a-972a-621e62bc2fd6"
     },
     {

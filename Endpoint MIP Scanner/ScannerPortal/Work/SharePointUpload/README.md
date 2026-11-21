@@ -263,3 +263,12 @@ Receiver 0.2.0 adds PublishAcceptance, AcceptanceListId, AcknowledgePublisherDen
 Acceptance key SHA-256 binds tenant/site/source list/exact device-batch path, excludes manifest hash so a conflicting manifest cannot create a second acceptance. Uses indexed CAML equality, unique Title enforced by SharePoint, add only, never update/delete. Reads back scalar fields, JSON binding, all eight summary counters and original acceptedUtc. Lost create response/concurrent create is resolved by rereading that unique key and accepting only a matching record; readback absence/conflict fails without overwrite. Acceptance state AcceptedValidatedBatch is a validation acknowledgment, not reporting/materialization completion. CentralAcceptancePublished=true only after readback; PortalIngestionConfirmed remains false. Shared app still cannot read this list: endpoint acknowledgment pull and batch lifecycle changes require later design; no added permissions or endpoint cleanup here. This is a point-in-time validated snapshot; mutable Landing can change later, so later reporting consumers must reverify against the stored manifest hash. Receiver remains an administrative interactive pilot, not a scheduled portal service.
 
 Local mocked PnP tests use real Windows PowerShell verifier: remote validation, repeat, corrupt input/hash rejection; acceptance lost-response recovery/reuse, conflicting record and unsafe ACL rejection. No maintainer live tenant writes. References https://pnp.github.io/powershell/cmdlets/Add-PnPListItem.html and https://pnp.github.io/powershell/cmdlets/Get-PnPListItem.html .
+
+### W06C accepted batch report
+
+Use receiver 0.3.0 with ReportAcceptedBatch and AcceptanceListId. The receiver
+revalidates the remote sealed batch and reads back the matching central
+acceptance. It emits counts by extension and outcome, plus distinct files
+and total matches per SIT, without exposing document paths. The report mode
+does not create an acceptance or update the local receipt. This is an
+interactive pilot report, not a materialized reporting dataset.

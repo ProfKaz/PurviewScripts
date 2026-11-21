@@ -1,9 +1,10 @@
 <#PSScriptInfo
-.VERSION 0.2.0
+.VERSION 0.3.0
 .GUID 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-21 0.3.0 W06C read-only reporting from accepted sealed evidence.
 2026-11-21 0.2.0 Optional W06B2 central acceptance publication after fresh remote validation and ACL review.
 2026-11-21 0.1.0 W06 independent portal-side read/validation preview; local receipt only.
 #>
@@ -11,7 +12,7 @@
 .DESCRIPTION
 Downloads and validates a sealed batch with existing Setup identity and PS5.1 contract. Optional central acceptance add/readback; no endpoint outbox access.
 .NOTES
-Version     : 0.2.0
+Version     : 0.3.0
 Tracking ID : 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 #>
 #Requires -Version 7.4
@@ -19,9 +20,10 @@ Tracking ID : 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 param([Parameter(Mandatory)][guid]$TenantId,[Parameter(Mandatory)][uri]$SiteUrl,
  [Parameter(Mandatory)][guid]$PortalClientId,[Parameter(Mandatory)][guid]$ListId,
  [Parameter(Mandatory)][string]$TargetRelativePath,[Parameter(Mandatory)][string]$ExpectedManifestSha256,
- [Parameter(Mandatory)][string]$VerificationModulePath,[switch]$PublishAcceptance,[guid]$AcceptanceListId=[guid]::Empty,[switch]$AcknowledgePublisherDenied,
+ [Parameter(Mandatory)][string]$VerificationModulePath,[switch]$PublishAcceptance,[switch]$ReportAcceptedBatch,[guid]$AcceptanceListId=[guid]::Empty,[switch]$AcknowledgePublisherDenied,
  [string]$StateDirectory=(Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner/Work/PortalReceiver'))
 $ErrorActionPreference='Stop'
+if($ReportAcceptedBatch -and ($PublishAcceptance -or $AcceptanceListId -eq [guid]::Empty -or $AcceptanceListId -eq $ListId)){throw 'Reporting requires a separate acceptance list and cannot publish.'}
 if($PublishAcceptance -and ($AcceptanceListId -eq [guid]::Empty -or $AcceptanceListId -eq $ListId -or -not $AcknowledgePublisherDenied)){throw 'Separate acceptance list and prior publisher-denial acknowledgment required.'}
 if($TenantId -eq [guid]::Empty -or $PortalClientId -eq [guid]::Empty -or $ListId -eq [guid]::Empty){throw 'Nonempty tenant, Setup and library IDs required.'}
 if($TargetRelativePath -cnotmatch '^work-pilot/devices/([a-f0-9]{32})/batches/([a-f0-9]{64})$'){throw 'Invalid exact device/batch path.'}
@@ -36,7 +38,7 @@ for($ancestor=[IO.DirectoryInfo]::new($StateDirectory);$ancestor;$ancestor=$ance
 $lock=[IO.File]::Open((Join-Path $StateDirectory 'writer.lock'),'OpenOrCreate','ReadWrite','None')
 $temp=Join-Path $StateDirectory ('download-'+[guid]::NewGuid().ToString('N'))
 $connection=$null
-function Publish-WorkAcceptance {
+function Get-WorkAcceptance {
  $ledger=Get-PnPList -Identity $AcceptanceListId -Includes Id,Title,BaseTemplate,HasUniqueRoleAssignments -Connection $connection
  if([guid]$ledger.Id -ne $AcceptanceListId -or $ledger.Title -ne 'ScannerPortalAcceptance' -or $ledger.BaseTemplate -ne 100 -or -not $ledger.HasUniqueRoleAssignments){throw 'Unexpected or inherited acceptance list.'}
  $admins=@(Get-PnPSiteCollectionAdmin -Connection $connection|ForEach-Object {$_.LoginName})
@@ -69,7 +71,7 @@ function Publish-WorkAcceptance {
  $values.AcceptanceJson=$acceptance|ConvertTo-Json -Compress -Depth 8
  $existing=@(Get-PnPListItem -List $AcceptanceListId -Query $query -Connection $connection)
  $created=$false;$uncertain=$false
- if(-not $existing.Count){
+ if(-not $existing.Count -and $PublishAcceptance){
   try{$null=Add-PnPListItem -List $AcceptanceListId -Values $values -Connection $connection;$created=$true}
   catch{$uncertain=$true}
   # Also resolves a unique-key race or a lost successful create response; never updates existing items.
@@ -124,6 +126,39 @@ try{
  if($LASTEXITCODE -ne 0){throw 'Original sealed batch verifier rejected downloaded evidence.'}
  $verified=($text -join "`n")|ConvertFrom-Json
  if(-not $verified.Verified -or $verified.BatchId -cne $batchId -or $verified.ManifestSha256 -cne $ExpectedManifestSha256){throw 'Unexpected verifier result.'}
+ if($ReportAcceptedBatch){
+  $central=Get-WorkAcceptance
+  $extensions=@{};$outcomes=@{};$types=@{}
+  foreach($line in [IO.File]::ReadLines((Join-Path $temp 'records.jsonl'))){
+   if([string]::IsNullOrWhiteSpace($line)){continue}
+   $record=ConvertFrom-Json -InputObject $line -AsHashtable
+   $extension=if($record.extension){$record.extension.ToLowerInvariant()}else{'(sin extension)'}
+   $outcome=[string]$record.outcome
+   $extensions[$extension]++
+   $outcomes[$outcome]++
+   $seen=[Collections.Generic.HashSet[guid]]::new()
+   foreach($finding in $record.findings){
+    $id=[guid]$finding.sitId
+    if(-not $types.ContainsKey($id)){
+     $types[$id]=[ordered]@{SitId=$id.ToString();Name=$finding.name;Files=0;Matches=[long]0}
+    }
+    if($seen.Add($id)){$types[$id].Files++}
+    $types[$id].Matches += [long]$finding.count
+   }
+  }
+  $report=[ordered]@{
+   Test='W06C-AcceptedBatchReport';Outcome='Reported';BatchId=$batchId;ManifestSha256=$actual
+   ReportingDeviceId=$deviceId;AccountObjectId=$manifest.identity.context.accountObjectId
+   AcceptanceItemId=$central.AcceptanceItemId;AcceptanceKey=$central.AcceptanceKey;FilesVerified=4
+   ByExtension=@($extensions.Keys | Sort-Object | ForEach-Object {[ordered]@{Extension=$_;Files=$extensions[$_]}})
+   ByOutcome=@($outcomes.Keys | Sort-Object | ForEach-Object {[ordered]@{Outcome=$_;Files=$outcomes[$_]}})
+   BySit=@($types.Keys | Sort-Object | ForEach-Object {$types[$_]})
+   CoverageErrors=$verified.Summary.coverageErrors;SharePointChanged=$false;PortalIngestionConfirmed=$false
+  }
+  Write-Host '=== WORK W06C PARA COMPARTIR ===' -ForegroundColor Magenta
+  Write-Host ($report|ConvertTo-Json -Depth 8) -ForegroundColor Magenta
+  return [pscustomobject]$report
+ }
  $receiptName=([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($TenantId.ToString()+'|'+$ListId.ToString()+'|'+$TargetRelativePath))))+'.json'
  $receiptPath=Join-Path $StateDirectory $receiptName;$already=$false
  if(Test-Path -LiteralPath $receiptPath){
@@ -132,8 +167,8 @@ try{
   $already=$true
  }
  $central=$null
- if($PublishAcceptance){$central=Publish-WorkAcceptance}
- $result=[ordered]@{Test=if($PublishAcceptance){'W06B2-CentralAcceptance'}else{'W06A-PortalReceptionValidation'};Version='0.2.0';Outcome=if($PublishAcceptance){'Accepted'}else{'Validated'};AlreadyValidatedLocally=$already
+ if($PublishAcceptance){$central=Get-WorkAcceptance}
+ $result=[ordered]@{Test=if($PublishAcceptance){'W06B2-CentralAcceptance'}else{'W06A-PortalReceptionValidation'};Version='0.3.0';Outcome=if($PublishAcceptance){'Accepted'}else{'Validated'};AlreadyValidatedLocally=$already
   Authentication='ExistingSetupDelegatedInteractive';TenantId=$TenantId.ToString();ListId=$ListId.ToString();BatchId=$batchId;ManifestSha256=$actual
   ReportingDeviceId=$deviceId;DeviceIdentitySource='FolderLocalPersistentGuidNotAttested';ReportedContext=$manifest.identity.context
   TargetRelativePath=$TargetRelativePath;FilesVerified=4;Summary=($verified.Summary|Select-Object candidateFiles,respondedFiles,noResponseFiles,errorFiles,skippedFiles,filesWithFindings,coverageErrors,appliedRetryCount);ValidatedUtc=[DateTimeOffset]::UtcNow.ToString('o')

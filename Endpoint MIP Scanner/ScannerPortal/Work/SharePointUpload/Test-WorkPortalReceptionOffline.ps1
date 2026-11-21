@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 0.2.0
+.VERSION 0.3.0
 .GUID d8a2a089-3acf-437a-972a-621e62bc2fd6
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
@@ -9,7 +9,7 @@
 #>
 <#
 .NOTES
-Version     : 0.2.0
+Version     : 0.3.0
 Tracking ID : d8a2a089-3acf-437a-972a-621e62bc2fd6
 #>
 #Requires -Version 7.4
@@ -52,6 +52,14 @@ try{
  [IO.File]::WriteAllText((Join-Path $fixture 'records.jsonl'),'');[IO.File]::WriteAllText((Join-Path $fixture 'coverage.jsonl'),'')
  $summary=@{candidateFiles=0;respondedFiles=0;noResponseFiles=0;errorFiles=0;skippedFiles=0;filesWithFindings=0;coverageErrors=0;appliedRetryCount=0}
  $summary|ConvertTo-Json|Set-Content (Join-Path $fixture 'summary.json')
+ $sit=[guid]::NewGuid().ToString()
+ $records=@(
+  @{extension='.txt';outcome='Responded';clientVersion='test';provenance=@{retry=$null};findings=@(@{sitId=$sit;name='Synthetic SIT';count=3})}
+  @{extension='.txt';outcome='NoResponse';clientVersion='test';provenance=@{retry=$null};findings=@()}
+ )
+ [IO.File]::WriteAllLines((Join-Path $fixture 'records.jsonl'),[string[]]@($records|ForEach-Object {ConvertTo-Json -InputObject $_ -Compress -Depth 6}))
+ $summary.candidateFiles=2;$summary.respondedFiles=1;$summary.noResponseFiles=1;$summary.filesWithFindings=1
+ $summary|ConvertTo-Json|Set-Content (Join-Path $fixture 'summary.json')
  $payloads=@(foreach($name in 'records.jsonl','coverage.jsonl','summary.json'){@{name=$name;bytes=(Get-Item (Join-Path $fixture $name)).Length;sha256=(Get-FileHash (Join-Path $fixture $name)).Hash}})
  @{schemaVersion=1;state='Sealed';batchId=$batch;identity=$identity;payloads=$payloads}|ConvertTo-Json -Depth 10|Set-Content (Join-Path $fixture 'manifest.json')
  $common=@{TenantId=$global:ReceiverFixture.Tenant;SiteUrl='https://example.sharepoint.com/sites/Pilot';PortalClientId=[guid]::NewGuid();ListId=$global:ReceiverFixture.List
@@ -73,6 +81,15 @@ try{
  $accepted=& $scriptPath @common
  $repeat=& $scriptPath @common
  Assert ($accepted.Outcome -eq 'Accepted' -and $accepted.CentralAcceptancePublished -and $accepted.CentralAcceptance.CreateResponseUncertain -and $repeat.CentralAcceptance.AcceptanceItemId -eq 42 -and $global:ReceiverFixture.Creates -eq 1 -and -not $repeat.CentralAcceptance.AcceptanceCreatedThisRun) 'Acceptance lost-response recovery/repeat failed.'
+ $common.Remove('PublishAcceptance')
+ $common.ReportAcceptedBatch=$true
+ $report=& $scriptPath @common
+ Assert ($report.AcceptanceItemId -eq 42 -and $report.ByExtension[0].Files -eq 2 -and $report.ByOutcome.Count -eq 2 -and $report.BySit[0].Matches -eq 3 -and $report.BySit[0].Files -eq 1) 'Reporting totals incorrect.'
+ $originalItem=$global:ReceiverFixture.Item
+ $global:ReceiverFixture.Item=$null
+ $rejected=$false;try{& $scriptPath @common|Out-Null}catch{$rejected=$true}
+ Assert ($rejected -and $global:ReceiverFixture.Creates -eq 1) 'Reporting accepted or created a missing receipt.'
+ $global:ReceiverFixture.Item=$originalItem
  $global:ReceiverFixture.Item.ManifestSha256=('F'*64);$rejected=$false
  try{& $scriptPath @common|Out-Null}catch{$rejected=$true};Assert $rejected 'Conflicting existing acceptance accepted.'
  $global:ReceiverFixture.Item.ManifestSha256=$common.ExpectedManifestSha256;$global:ReceiverFixture.BadAcl=$true;$rejected=$false
