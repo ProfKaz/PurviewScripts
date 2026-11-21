@@ -343,6 +343,16 @@
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkLibraryAcl.ps1",
       "Version": "0.2.0",
       "TrackingId": "5d60e962-a7e4-47be-839b-c61b96789a75"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkPortalReception.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "9db4ac4a-f2e7-4fd6-9413-1557d38fb74f"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkPortalReceptionOffline.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "d8a2a089-3acf-437a-972a-621e62bc2fd6"
     }
   ],
   "Dependencies": [
