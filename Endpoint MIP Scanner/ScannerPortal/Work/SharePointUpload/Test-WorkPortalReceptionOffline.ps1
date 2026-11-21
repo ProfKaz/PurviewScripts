@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 0.3.0
+.VERSION 0.4.0
 .GUID d8a2a089-3acf-437a-972a-621e62bc2fd6
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
@@ -9,7 +9,7 @@
 #>
 <#
 .NOTES
-Version     : 0.3.0
+Version     : 0.4.0
 Tracking ID : d8a2a089-3acf-437a-972a-621e62bc2fd6
 #>
 #Requires -Version 7.4
@@ -34,10 +34,18 @@ function Get-PnPFile{param($Url,[switch]$AsListItem,$Connection,$Path,$FileName,
 }
 function Get-PnPSiteCollectionAdmin{param($Connection) @{LoginName='admin'}}
 function Get-PnPField{param($List,$Identity,$Connection)
+ if(-not $Identity -or $Identity -eq 'PortalReportJson'){if($global:ReceiverFixture.ReportField){[pscustomobject]$global:ReceiverFixture.ReportField};return}
  if($Identity -eq 'Title'){return @{Indexed=$true;EnforceUniqueValues=$true;Required=$true}}
  @{TypeAsString='Note';RichText=$false;AppendOnly=$false}
 }
-function Get-PnPListItem{param($List,$Query,$Connection) if($global:ReceiverFixture.Item){$global:ReceiverFixture.Item}}
+function Add-PnPField{param($List,$DisplayName,$InternalName,$Type,$Connection)
+ $global:ReceiverFixture.ReportField=@{InternalName=$InternalName;TypeAsString=$Type;RichText=$false;AppendOnly=$false}
+}
+function Set-PnPListItem{param($List,$Identity,$Values,$Connection)
+ $global:ReceiverFixture.Item.PortalReportJson=$Values.PortalReportJson
+ $global:ReceiverFixture.ReportWrites++
+}
+function Get-PnPListItem{param($List,$Query,$Id,$Connection) if($global:ReceiverFixture.Item){$global:ReceiverFixture.Item}}
 function Add-PnPListItem{param($List,$Values,$Connection)
  $global:ReceiverFixture.Creates++;$global:ReceiverFixture.Item=$Values.Clone();$global:ReceiverFixture.Item.Id=42
  if($global:ReceiverFixture.LostResponse){throw 'Response lost'}
@@ -85,6 +93,14 @@ try{
  $common.ReportAcceptedBatch=$true
  $report=& $scriptPath @common
  Assert ($report.AcceptanceItemId -eq 42 -and $report.ByExtension[0].Files -eq 2 -and $report.ByOutcome.Count -eq 2 -and $report.BySit[0].Matches -eq 3 -and $report.BySit[0].Files -eq 1) 'Reporting totals incorrect.'
+ $common.StoreReport=$true
+ $stored=& $scriptPath @common
+ $reused=& $scriptPath @common
+ Assert ($stored.Outcome -eq 'Stored' -and $stored.PortalIngestionConfirmed -and $reused.Outcome -eq 'Reused' -and -not $reused.SharePointChanged -and $stored.ReportSha256 -eq $reused.ReportSha256 -and $global:ReceiverFixture.ReportWrites -eq 1) 'Stored report readback/reuse failed.'
+ $global:ReceiverFixture.Item.PortalReportJson='{}'
+ $rejected=$false;try{& $scriptPath @common|Out-Null}catch{$rejected=$true}
+ Assert ($rejected -and $global:ReceiverFixture.ReportWrites -eq 1) 'Existing conflicting summary overwritten.'
+ $common.Remove('StoreReport')
  $originalItem=$global:ReceiverFixture.Item
  $global:ReceiverFixture.Item=$null
  $rejected=$false;try{& $scriptPath @common|Out-Null}catch{$rejected=$true}

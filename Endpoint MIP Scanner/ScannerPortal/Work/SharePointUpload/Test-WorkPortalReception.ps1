@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 0.3.0
+.VERSION 0.4.0
 .GUID 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
@@ -12,7 +12,7 @@
 .DESCRIPTION
 Downloads and validates a sealed batch with existing Setup identity and PS5.1 contract. Optional central acceptance add/readback; no endpoint outbox access.
 .NOTES
-Version     : 0.3.0
+Version     : 0.4.0
 Tracking ID : 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 #>
 #Requires -Version 7.4
@@ -20,9 +20,10 @@ Tracking ID : 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 param([Parameter(Mandatory)][guid]$TenantId,[Parameter(Mandatory)][uri]$SiteUrl,
  [Parameter(Mandatory)][guid]$PortalClientId,[Parameter(Mandatory)][guid]$ListId,
  [Parameter(Mandatory)][string]$TargetRelativePath,[Parameter(Mandatory)][string]$ExpectedManifestSha256,
- [Parameter(Mandatory)][string]$VerificationModulePath,[switch]$PublishAcceptance,[switch]$ReportAcceptedBatch,[guid]$AcceptanceListId=[guid]::Empty,[switch]$AcknowledgePublisherDenied,
+ [Parameter(Mandatory)][string]$VerificationModulePath,[switch]$PublishAcceptance,[switch]$ReportAcceptedBatch,[switch]$StoreReport,[guid]$AcceptanceListId=[guid]::Empty,[switch]$AcknowledgePublisherDenied,
  [string]$StateDirectory=(Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner/Work/PortalReceiver'))
 $ErrorActionPreference='Stop'
+if($StoreReport -and -not $ReportAcceptedBatch){throw 'StoreReport requires ReportAcceptedBatch.'}
 if($ReportAcceptedBatch -and ($PublishAcceptance -or $AcceptanceListId -eq [guid]::Empty -or $AcceptanceListId -eq $ListId)){throw 'Reporting requires a separate acceptance list and cannot publish.'}
 if($PublishAcceptance -and ($AcceptanceListId -eq [guid]::Empty -or $AcceptanceListId -eq $ListId -or -not $AcknowledgePublisherDenied)){throw 'Separate acceptance list and prior publisher-denial acknowledgment required.'}
 if($TenantId -eq [guid]::Empty -or $PortalClientId -eq [guid]::Empty -or $ListId -eq [guid]::Empty){throw 'Nonempty tenant, Setup and library IDs required.'}
@@ -155,7 +156,40 @@ try{
    BySit=@($types.Keys | Sort-Object | ForEach-Object {$types[$_]})
    CoverageErrors=$verified.Summary.coverageErrors;SharePointChanged=$false;PortalIngestionConfirmed=$false
   }
-  Write-Host '=== WORK W06C PARA COMPARTIR ===' -ForegroundColor Magenta
+  if($StoreReport){
+   $summaryJson=ConvertTo-Json -InputObject ([ordered]@{
+    SchemaVersion=1;BatchId=$batchId;ManifestSha256=$actual;AcceptanceKey=$central.AcceptanceKey
+    ReportingDeviceId=$deviceId;AccountObjectId=$report.AccountObjectId
+    ByExtension=$report.ByExtension;ByOutcome=$report.ByOutcome;BySit=$report.BySit
+    CoverageErrors=$report.CoverageErrors
+   }) -Depth 8 -Compress
+   if($summaryJson.Length -gt 60000){throw 'Summary exceeds the pilot column size limit.'}
+   $column='PortalReportJson'
+   $field=@(Get-PnPField -List $AcceptanceListId -Connection $connection | Where-Object InternalName -eq $column)
+   if(-not $field.Count){
+    $null=Add-PnPField -List $AcceptanceListId -DisplayName $column -InternalName $column -Type Note -Connection $connection
+   }
+   $field=Get-PnPField -List $AcceptanceListId -Identity $column -Connection $connection
+   if($field.TypeAsString -ne 'Note' -or $field.RichText -or $field.AppendOnly){throw 'Unexpected report column schema.'}
+   $item=Get-PnPListItem -List $AcceptanceListId -Id $central.AcceptanceItemId -Connection $connection
+   if($item['Title'] -cne $central.AcceptanceKey -or $item['ManifestSha256'] -cne $actual){throw 'Acceptance changed before report storage.'}
+   $stored=[string]$item[$column]
+   $changed=-not $stored
+   if($changed){
+    $null=Set-PnPListItem -List $AcceptanceListId -Identity $central.AcceptanceItemId -Values @{PortalReportJson=$summaryJson} -Connection $connection
+    $item=Get-PnPListItem -List $AcceptanceListId -Id $central.AcceptanceItemId -Connection $connection
+    $stored=[string]$item[$column]
+   }
+   if($stored -cne $summaryJson -or $item['Title'] -cne $central.AcceptanceKey -or $item['ManifestSha256'] -cne $actual){throw 'Stored report differs from validated summary or acceptance binding.'}
+   $report.Test='W06D-StoreAcceptedBatchReport'
+   $report.Outcome=if($changed){'Stored'}else{'Reused'}
+   $report.SharePointChanged=$changed
+   $report.PortalIngestionConfirmed=$true
+   $report.ReportSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($stored)))
+   $report.SitTypes=$report.BySit.Count
+   $report.Remove('BySit')
+  }
+  Write-Host ($(if($StoreReport){'=== WORK W06D PARA COMPARTIR ==='}else{'=== WORK W06C PARA COMPARTIR ==='})) -ForegroundColor Magenta
   Write-Host ($report|ConvertTo-Json -Depth 8) -ForegroundColor Magenta
   return [pscustomobject]$report
  }
@@ -168,7 +202,7 @@ try{
  }
  $central=$null
  if($PublishAcceptance){$central=Get-WorkAcceptance}
- $result=[ordered]@{Test=if($PublishAcceptance){'W06B2-CentralAcceptance'}else{'W06A-PortalReceptionValidation'};Version='0.3.0';Outcome=if($PublishAcceptance){'Accepted'}else{'Validated'};AlreadyValidatedLocally=$already
+ $result=[ordered]@{Test=if($PublishAcceptance){'W06B2-CentralAcceptance'}else{'W06A-PortalReceptionValidation'};Version='0.4.0';Outcome=if($PublishAcceptance){'Accepted'}else{'Validated'};AlreadyValidatedLocally=$already
   Authentication='ExistingSetupDelegatedInteractive';TenantId=$TenantId.ToString();ListId=$ListId.ToString();BatchId=$batchId;ManifestSha256=$actual
   ReportingDeviceId=$deviceId;DeviceIdentitySource='FolderLocalPersistentGuidNotAttested';ReportedContext=$manifest.identity.context
   TargetRelativePath=$TargetRelativePath;FilesVerified=4;Summary=($verified.Summary|Select-Object candidateFiles,respondedFiles,noResponseFiles,errorFiles,skippedFiles,filesWithFindings,coverageErrors,appliedRetryCount);ValidatedUtc=[DateTimeOffset]::UtcNow.ToString('o')

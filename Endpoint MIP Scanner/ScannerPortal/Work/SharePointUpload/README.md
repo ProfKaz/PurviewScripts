@@ -272,3 +272,12 @@ acceptance. It emits counts by extension and outcome, plus distinct files
 and total matches per SIT, without exposing document paths. The report mode
 does not create an acceptance or update the local receipt. This is an
 interactive pilot report, not a materialized reporting dataset.
+
+### W06D stored pilot report
+
+Add StoreReport to the W06C parameters. After fresh evidence and acceptance
+validation, the script stores the aggregate JSON in PortalReportJson on the
+existing protected acceptance item and verifies it by reading it back.
+Readers can request PortalReportJson directly by acceptance item ID.
+An identical report is reused. A differing existing report stops the pilot.
+Run one administrative publisher at a time. No endpoint changes are needed.
