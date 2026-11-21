@@ -1,17 +1,17 @@
-﻿<#PSScriptInfo
-.VERSION 0.1.1
+<#PSScriptInfo
+.VERSION 0.2.0
 .GUID 5d60e962-a7e4-47be-839b-c61b96789a75
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
-2026-11-20 0.1.1 Reproduce non-enumerated collection output instead of only array fixtures.
+2026-11-20 0.2.0 Reproduce non-enumerated collection output instead of only array fixtures.
 2026-11-20 0.1.0 ACL configuration classification tests with simulated PnP.
 #>
 <#
 .DESCRIPTION
 Offline mocks; no SharePoint login, writes or permission changes.
 .NOTES
-Version     : 0.1.1
+Version     : 0.2.0
 Tracking ID : 5d60e962-a7e4-47be-839b-c61b96789a75
 #>
 #Requires -Version 7.4
@@ -76,6 +76,11 @@ try{
     Assert ($result.Outcome -eq 'ConfigurationReviewed' -and -not $result.NeedsReview) 'Expected admin group/publisher classification failed.'
     Assert ($result.Library.Assignments[0].Roles.Count -eq 2 -and $result.Library.Assignments[0].Roles[0].Name -eq 'Full Control') 'Multiple binding roles were not enumerated individually.'
     Assert ($result.Library.Assignments[2].Classification -eq 'LimitedAccessOnly' -and -not $result.OrdinaryUserEffectiveAccessTested) 'Limited Access or review scope was misrepresented.'
+    $targetPath='work-pilot/devices/'+('a'*32)+'/batches/'+('b'*64)
+    $target=& $path @common -TargetRelativePath $targetPath
+    Assert ($target.TargetFolderAclReviewed -and $target.TargetAncestorScopes.Count -eq 5 -and -not $target.NeedsReview -and -not $target.ReadyForRealUpload) 'Exact target ancestor review failed.'
+    $rejected=$false;try{& $path @common -TargetRelativePath '../escape'|Out-Null}catch{$rejected=$true}
+    Assert $rejected 'Traversal target accepted.'
     $global:AclFixture.Members=@([pscustomobject]@{Title='Nested Entra group';LoginName='c:0t.c|tenant|group-guid';PrincipalType='SecurityGroup'})
     $result=& $path @common
     Assert ($result.NeedsReview -and $result.Library.Assignments[0].Members[0].Classification -eq 'EntraGroupMembershipNotResolved') 'Unresolved Entra group was treated as restricted.'

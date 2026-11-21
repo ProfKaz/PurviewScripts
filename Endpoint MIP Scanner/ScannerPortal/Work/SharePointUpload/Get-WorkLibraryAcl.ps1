@@ -1,25 +1,26 @@
-﻿<#PSScriptInfo
-.VERSION 0.1.1
+<#PSScriptInfo
+.VERSION 0.2.0
 .GUID 0939436e-815a-4b44-a73c-f3d5d7e5f34
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
-2026-11-20 0.1.1 Load CSOM collection properties separately, then enumerate their individual objects.
+2026-11-20 0.2.0 Load CSOM collection properties separately, then enumerate their individual objects.
 2026-11-20 0.1.0 Read-only library and work-pilot ACL configuration review before real evidence transfer.
 #>
 <#
 .DESCRIPTION
 Inspects ACL configuration with the existing delegated Setup app. Does not test another user's effective access or modify permissions.
 .NOTES
-Version     : 0.1.1
+Version     : 0.2.0
 Tracking ID : 0939436e-815a-4b44-a73c-f3d5d7e5f34
 #>
 #Requires -Version 7.4
 [CmdletBinding()]
 param([Parameter(Mandatory)][guid]$TenantId,[Parameter(Mandatory)][uri]$SiteUrl,
     [Parameter(Mandatory)][guid]$PortalClientId,[Parameter(Mandatory)][guid]$PublisherClientId,
-    [Parameter(Mandatory)][guid]$ListId)
+    [Parameter(Mandatory)][guid]$ListId,[string]$TargetRelativePath)
 $ErrorActionPreference='Stop'
+if($TargetRelativePath -and $TargetRelativePath -cnotmatch '^work-pilot/devices/[a-f0-9]{32}/batches/[a-f0-9]{64}$'){throw 'Expected exact Work device/batch relative path.'}
 if($TenantId -eq [guid]::Empty -or $PortalClientId -eq [guid]::Empty -or $PublisherClientId -eq [guid]::Empty -or $ListId -eq [guid]::Empty -or $PortalClientId -eq $PublisherClientId){throw 'Specify distinct existing Setup/publisher identities and a list GUID.'}
 if($SiteUrl.Scheme -ne 'https' -or $SiteUrl.Host -notmatch '^[a-z0-9-]+\.sharepoint\.com$' -or
     $SiteUrl.AbsolutePath -notmatch '^/sites/[A-Za-z0-9_-]+/?$' -or $SiteUrl.Query -or $SiteUrl.Fragment -or $SiteUrl.UserInfo -or -not $SiteUrl.IsDefaultPort){throw 'Expected commercial SharePoint site URL.'}
@@ -100,17 +101,28 @@ try{
     $folder=Get-PnPFolder -Url ($rootFolder.ServerRelativeUrl.TrimEnd('/')+'/work-pilot') -Connection $connection
     $item=Get-PnPProperty -ClientObject $folder -Property ListItemAllFields -Connection $connection
     $parent=Read-WorkAclScope $item 'work-pilot'
-    $reviewNeeded=(-not $library.HasUniqueRoleAssignments -or $library.AssignmentsNeedingReview -gt 0 -or $parent.AssignmentsNeedingReview -gt 0 -or $script:AclIssues.Count -gt 0)
-    $result=[pscustomobject][ordered]@{Test='W05A-LibraryAclConfiguration';Version='0.1.1'
+    $chain=@()
+    if($TargetRelativePath){
+        $parts=$TargetRelativePath.Split('/');$relative=''
+        $chain=@(foreach($part in $parts){
+            $relative=if($relative){$relative+'/'+$part}else{$part}
+            $targetFolder=Get-PnPFolder -Url ($rootFolder.ServerRelativeUrl.TrimEnd('/')+'/'+$relative) -Connection $connection
+            $targetItem=Get-PnPProperty -ClientObject $targetFolder -Property ListItemAllFields -Connection $connection
+            Read-WorkAclScope $targetItem $relative
+        })
+    }
+    $reviewNeeded=(-not $library.HasUniqueRoleAssignments -or $library.AssignmentsNeedingReview -gt 0 -or $parent.AssignmentsNeedingReview -gt 0 -or @($chain|Where-Object AssignmentsNeedingReview -gt 0).Count -gt 0 -or $script:AclIssues.Count -gt 0)
+    $result=[pscustomobject][ordered]@{Test=if($TargetRelativePath){'W05E-TargetAclConfiguration'}else{'W05A-LibraryAclConfiguration'};Version='0.2.0'
         Outcome=if($script:AclIssues.Count){'Partial'}elseif($reviewNeeded){'NeedsReview'}else{'ConfigurationReviewed'}
         TenantId=$TenantId.ToString();SiteUrl=$web.Url;ListId=$ListId.ToString();Authentication='ExistingSetupDelegatedInteractive'
         SetupClientId=$PortalClientId.ToString();PublisherClientId=$PublisherClientId.ToString()
         SiteAdministrators=@($admins|ForEach-Object {[pscustomobject]@{Name=$_.Title;Login=$_.LoginName}})
         Library=$library;WorkPilotParent=$parent;NeedsReview=$reviewNeeded;Issues=$script:AclIssues.ToArray()
-        ReviewScope='Library and existing work-pilot parent only';DescendantUniquePermissionsReviewed=$false
+        TargetRelativePath=$TargetRelativePath;TargetAncestorScopes=$chain;TargetFolderAclReviewed=[bool]$TargetRelativePath
+        ReadyForRealUpload=$false;ReviewScope=if($TargetRelativePath){'Library and each ancestor through exact batch folder'}else{'Library and existing work-pilot parent only'};DescendantUniquePermissionsReviewed=$false
         OrdinaryUserEffectiveAccessTested=$false;FutureTargetFolderAclReviewed=$false
         PermissionsChanged=$false;FilesUploaded=0;CertificatesCreated=0}
-    Write-Host '=== WORK W05A PARA COMPARTIR ===' -ForegroundColor Magenta
+    Write-Host ($(if($TargetRelativePath){'=== WORK W05E PARA COMPARTIR ==='}else{'=== WORK W05A PARA COMPARTIR ==='})) -ForegroundColor Magenta
     Write-Host ($result|ConvertTo-Json -Depth 12) -ForegroundColor Magenta
     $result
 }finally{if($connection){Disconnect-PnPOnline -ErrorAction SilentlyContinue}}
