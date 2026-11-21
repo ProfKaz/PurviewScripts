@@ -353,6 +353,16 @@
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkPortalReceptionOffline.ps1",
       "Version": "0.1.0",
       "TrackingId": "d8a2a089-3acf-437a-972a-621e62bc2fd6"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Initialize-WorkAcceptanceLedger.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "293a1ff1-f699-44bc-9e22-6e2d2aa0d5d2"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkAcceptanceLedger.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "a35628b3-e27b-4d07-b5ca-a018b5dd8245"
     }
   ],
   "Dependencies": [
