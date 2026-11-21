@@ -1,9 +1,10 @@
-﻿<#PSScriptInfo
-.VERSION 0.4.0
+<#PSScriptInfo
+.VERSION 0.5.0
 .GUID 382fa9db-fd14-4903-b3c6-19bf35d4be2a
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-20 0.5.0 Real batch protocol tests with synthetic payloads: interrupted write, repeat, corrupt download and changed local payload.
 2026-11-20 0.4.0 Synthetic marker, safe retry after disconnect, existing path conflict and corrupt-download tests.
 2026-11-20 0.2.0 App-only library/root reads, control denial and failure-boundary tests.
 2026-11-20 0.1.0 Real single-certificate lifecycle and signed assertion with mocked directory/token transport.
@@ -12,7 +13,7 @@
 .DESCRIPTION
 Offline shared publisher tests. Uses a temporary CurrentUser certificate; no tenant or SharePoint calls.
 .NOTES
-Version     : 0.4.0
+Version     : 0.5.0
 Tracking ID : 382fa9db-fd14-4903-b3c6-19bf35d4be2a
 #>
 #Requires -Version 7.4
@@ -83,6 +84,17 @@ function Invoke-RestMethod{param($Uri,$Method,$ContentType,$Body,$Headers)
     $f=$global:SharedWorkFixture
     if($Uri.StartsWith('https://graph.microsoft.com/v1.0/drives/')){
         if($Headers.Authorization -ne 'Bearer DO-NOT-SHARE-TOKEN'){throw 'Missing graph authorization.'}
+        if($Uri -match '/(records.jsonl|coverage.jsonl|summary.json|manifest.json)(:/content\?@microsoft.graph.conflictBehavior=fail)?$'){
+            $name=$Matches[1]
+            if($Method -eq 'PUT'){
+                if($f.BatchFiles.ContainsKey($name)){$e=[Exception]::new('conflict');$e|Add-Member ResponseStatusCode 409;throw $e}
+                $f.BatchFiles[$name]=[byte[]]$Body;$f.BatchOrder.Add($name)
+                if($f.BatchDisconnect){$f.BatchDisconnect=$false;throw 'lost response'}
+                return @{id=$name}
+            }
+            if(-not $f.BatchFiles.ContainsKey($name)){$e=[Exception]::new('missing');$e|Add-Member ResponseStatusCode 404;throw $e}
+            return @{id=$name;name=$name;file=@{};size=$f.BatchFiles[$name].Length;'@microsoft.graph.downloadUrl'=('https://example.invalid/batch/'+$name)}
+        }
         if($Method -eq 'GET' -and $Uri -match '/children\?'){return @{value=@()}}
         if($Method -eq 'POST' -and $Uri -match '/items/([^/]+)/children$'){
             $parent=$Matches[1];$folder=$Body|ConvertFrom-Json -AsHashtable
@@ -135,6 +147,12 @@ function Invoke-RestMethod{param($Uri,$Method,$ContentType,$Body,$Headers)
     @{access_token='DO-NOT-SHARE-TOKEN';expires_in=3600}
 }
 function Invoke-WebRequest{param($Uri,$Method,$OutFile,$MaximumRedirection,$TimeoutSec,$Headers)
+    if($Uri -match '^https://example.invalid/batch/(.+)$'){
+        if($Headers -or $Method -ne 'GET'){throw 'Leaked authorization'}
+        $bytes=[byte[]]$global:SharedWorkFixture.BatchFiles[$Matches[1]].Clone()
+        if($global:SharedWorkFixture.CorruptBatch){$bytes[0]=$bytes[0] -bxor 1}
+        [IO.File]::WriteAllBytes($OutFile,$bytes);return
+    }
     if($Uri -ne 'https://example.invalid/preauthenticated-test-url' -or $Headers -or $Method -ne 'GET'){throw 'Download used an authorization header or wrong URL/method.'}
     $bytes=[byte[]]$global:SharedWorkFixture.MarkerBytes.Clone()
     if($global:SharedWorkFixture.CorruptDownload){$bytes[0]=$bytes[0] -bxor 1}
@@ -190,7 +208,15 @@ try{
     $global:SharedWorkFixture.CorruptDownload=$false;$global:SharedWorkFixture.MarkerBytes=$null;$access.ProbeId=[guid]::NewGuid()
     $fresh=& $scriptPath @access
     Assert ($fresh.MarkerUploadedThisRun -and $fresh.DownloadHashVerified -and $fresh.ProbeId -ne $marker.ProbeId -and $global:SharedWorkFixture.FilePuts -eq 2) 'Explicit new probe failed the first-upload happy path.'
-    $access.Step='PrepareBatchTarget';$access.Remove('ProbeId');$access.BatchId=('A'*64);$access.ExpectedManifestSha256=('B'*64)
+    $batchDir=Join-Path $fixture 'batch';[void][IO.Directory]::CreateDirectory($batchDir)
+    $payloads=@(foreach($name in 'records.jsonl','coverage.jsonl','summary.json'){
+        $local=Join-Path $batchDir $name;[IO.File]::WriteAllText($local,'{}')
+        @{name=$name;bytes=2;sha256=(Get-FileHash $local).Hash}
+    })
+    @{schemaVersion=1;state='Sealed';batchId=('A'*64);payloads=$payloads}|ConvertTo-Json -Depth 5|Set-Content (Join-Path $batchDir 'manifest.json')
+    $manifestHash=(Get-FileHash (Join-Path $batchDir 'manifest.json')).Hash
+    $global:SharedWorkFixture.BatchFiles=@{};$global:SharedWorkFixture.BatchOrder=[Collections.Generic.List[string]]::new()
+    $access.Step='PrepareBatchTarget';$access.Remove('ProbeId');$access.BatchId=('A'*64);$access.ExpectedManifestSha256=$manifestHash
     $target=& $scriptPath @access
     $repeat=& $scriptPath @access
     Assert ($target.TargetEmpty -and $target.Outcome -eq 'TargetPreparedEmpty' -and -not $target.ReadyForRealUpload -and -not $target.RealBatchRead) 'Target preparation claimed upload readiness or read real data.'
@@ -198,6 +224,25 @@ try{
     $access.ExpectedManifestSha256=('C'*64)
     $rejected=$false;try{& $scriptPath @access|Out-Null}catch{$rejected=$true}
     Assert $rejected 'Changed manifest binding accepted.'
+    $access.Step='UploadBatch';$access.ExpectedManifestSha256=$manifestHash;$access.BatchDirectory=$batchDir;$access.AcknowledgeTargetAclReview=$true
+    $global:SharedWorkFixture.BatchDisconnect=$true
+    $rejected=$false;try{& $scriptPath @access|Out-Null}catch{$rejected=$true}
+    Assert ($rejected -and $global:SharedWorkFixture.BatchFiles.Count -eq 1) 'Lost upload response not simulated.'
+    $sent=& $scriptPath @access
+    $repeat=& $scriptPath @access
+    Assert ($sent.FilesVerified -eq 4 -and $sent.FilesUploaded -eq 3 -and $repeat.FilesUploaded -eq 0 -and $repeat.LocalBatchPreserved) 'Resume/repeat failed.'
+    Assert (($global:SharedWorkFixture.BatchOrder -join ',') -ceq 'records.jsonl,coverage.jsonl,summary.json,manifest.json') 'Manifest not last or duplicate write.'
+    $access.AcknowledgeTargetAclReview=$false
+    $rejected=$false;try{& $scriptPath @access|Out-Null}catch{$rejected=$true}
+    Assert $rejected 'Missing ACL acknowledgment accepted.'
+    $access.AcknowledgeTargetAclReview=$true
+    $global:SharedWorkFixture.CorruptBatch=$true
+    $rejected=$false;try{& $scriptPath @access|Out-Null}catch{$rejected=$true}
+    Assert $rejected 'Corrupt download accepted.'
+    $global:SharedWorkFixture.CorruptBatch=$false
+    [IO.File]::WriteAllText((Join-Path $batchDir 'records.jsonl'),'changed')
+    $rejected=$false;try{& $scriptPath @access|Out-Null}catch{$rejected=$true}
+    Assert ($rejected -and $global:SharedWorkFixture.BatchOrder.Count -eq 4) 'Changed local payload accepted or remote overwritten.'
     $global:SharedWorkFixture.Grants+=@{resourceId=[guid]::NewGuid().ToString();appRoleId=[guid]::NewGuid().ToString()}
     $rejected=$false;try{& $scriptPath -Step Prepare -TenantId $global:SharedWorkFixture.Tenant -StateDirectory $fixture|Out-Null}catch{$rejected=$true}
     Assert ($rejected -and $global:SharedWorkFixture.KeyWrites -eq 1) 'Unexpected effective permissions were not rejected before credential update.'

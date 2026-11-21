@@ -1,9 +1,10 @@
-﻿<#PSScriptInfo
-.VERSION 0.4.0
+<#PSScriptInfo
+.VERSION 0.5.0
 .GUID 93b41e48-1698-483c-9a57-986b9b387239
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-20 0.5.0 W05F sealed report upload, manifest last, downloaded hashes and separate transport receipt.
 2026-11-20 0.4.0 Prepare an empty per-device/per-batch target before ACL review; no real payload reads/uploads.
 2026-11-20 0.3.0 W04 synthetic marker upload, retry without overwrite and downloaded SHA-256 verification.
 2026-11-20 0.2.0 W03C app-only metadata reads and denied access to a known ungranted list.
@@ -13,23 +14,23 @@
 .DESCRIPTION
 Standalone shared publisher pilot. Prepare sets up the identity; Authenticate/TestAccess read only; UploadProbe writes only a generated synthetic marker.
 .NOTES
-Version     : 0.4.0
+Version     : 0.5.0
 Tracking ID : 93b41e48-1698-483c-9a57-986b9b387239
 #>
 #Requires -Version 7.4
 [CmdletBinding()]
 param([Parameter(Mandatory)][guid]$TenantId,
-    [ValidateSet('Prepare','Authenticate','TestAccess','UploadProbe','PrepareBatchTarget')][string]$Step='Authenticate',
+    [ValidateSet('Prepare','Authenticate','TestAccess','UploadProbe','PrepareBatchTarget','UploadBatch')][string]$Step='Authenticate',
     [string]$StateDirectory=(Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner/Work/SharedPublisher'),
     [guid]$ClientId=[guid]::Empty,
     [switch]$AllowCertificateExport,
     [string]$SiteId,[guid]$ListId=[guid]::Empty,[string]$DriveId,
     [guid]$ControlListId=[guid]::Empty,[guid]$ProbeId=[guid]::Empty,
-    [string]$BatchId,[string]$ExpectedManifestSha256)
+    [string]$BatchId,[string]$ExpectedManifestSha256,[string]$BatchDirectory,[switch]$AcknowledgeTargetAclReview)
 $ErrorActionPreference='Stop'
 if($TenantId -eq [guid]::Empty){throw 'Specify a tenant GUID.'}
-if($Step -eq 'PrepareBatchTarget' -and ($BatchId -cnotmatch '^[A-F0-9]{64}$' -or $ExpectedManifestSha256 -cnotmatch '^[A-F0-9]{64}$')){throw 'Supply the exact verified uppercase batch ID and original manifest SHA-256.'}
-if($Step -in 'TestAccess','UploadProbe','PrepareBatchTarget'){
+if($Step -in @('PrepareBatchTarget','UploadBatch') -and ($BatchId -cnotmatch '^[A-F0-9]{64}$' -or $ExpectedManifestSha256 -cnotmatch '^[A-F0-9]{64}$')){throw 'Supply the exact verified uppercase batch ID and original manifest SHA-256.'}
+if($Step -in 'TestAccess','UploadProbe','PrepareBatchTarget','UploadBatch'){
     $siteParts=$SiteId.Split(',')
     if($siteParts.Count -ne 3 -or $siteParts[0] -notmatch '^[a-z0-9-]+\.sharepoint\.com$' -or
         [guid]$siteParts[1] -eq [guid]::Empty -or [guid]$siteParts[2] -eq [guid]::Empty -or
@@ -140,6 +141,75 @@ function Shared-ProbeUpload($Root,$List,$Headers){
         RealBatchRead=$false;RealBatchUploaded=$false;CertificatesCreated=0;AdministrativeLoginUsed=$false;TokenReturnedToConsole=$false
         OrdinaryUserAclReviewed=$false}
 }
+function Shared-UploadBatch($Root,$List,$Headers){
+    $target=$state.batchTarget
+    if(-not $AcknowledgeTargetAclReview -or -not $target -or $target.batchId -cne $BatchId -or $target.expectedManifestSha256 -cne $ExpectedManifestSha256 -or $target.siteId -ne $SiteId -or $target.listId -ne $ListId.ToString() -or $target.driveId -cne $DriveId){throw 'Reviewed target and original manifest binding required.'}
+    $relative='work-pilot/devices/'+([guid]$state.reportingDeviceId).ToString('N')+'/batches/'+$BatchId.ToLowerInvariant()
+    if($target.relativePath -cne $relative -or $state.reportingDeviceName -cne $env:COMPUTERNAME){throw 'Device/target binding mismatch.'}
+    $directory=[IO.Path]::GetFullPath($BatchDirectory)
+    for($ancestor=[IO.DirectoryInfo]::new($directory);$ancestor;$ancestor=$ancestor.Parent){if($ancestor.Exists -and ($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Reparse batch directory.'}}
+    $streams=@{};$hashes=@{};$lengths=@{};$rows=@();$uploaded=0
+    try{
+        # Keep read-only handles open: another writer cannot change or replace source files during verification/transfer.
+        foreach($name in 'manifest.json','records.jsonl','coverage.jsonl','summary.json'){
+            $path=Join-Path $directory $name
+            if((Get-Item -LiteralPath $path).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Reparse batch file.'}
+            $stream=[IO.File]::Open($path,'Open','Read','Read');$streams[$name]=$stream
+            if($stream.Length -gt 64MB){throw 'W05F pilot supports at most 64 MiB per file; no files uploaded.'}
+            $lengths[$name]=$stream.Length
+            $sha=[Security.Cryptography.SHA256]::Create()
+            try{$hashes[$name]=[Convert]::ToHexString($sha.ComputeHash($stream))}finally{$sha.Dispose()};$stream.Position=0
+        }
+        if($hashes['manifest.json'] -cne $ExpectedManifestSha256){throw 'Original manifest hash mismatch.'}
+        $reader=[IO.StreamReader]::new($streams['manifest.json'],[Text.UTF8Encoding]::new($false,$true),$false,4096,$true)
+        try{$manifest=$reader.ReadToEnd()|ConvertFrom-Json -AsHashtable}finally{$reader.Dispose()};$streams['manifest.json'].Position=0
+        if($manifest.schemaVersion -ne 1 -or $manifest.state -ne 'Sealed' -or $manifest.batchId -cne $BatchId -or $manifest.payloads.Count -ne 3){throw 'Expected original sealed report contract.'}
+        $seen=@{}
+        foreach($payload in $manifest.payloads){
+            $name=[string]$payload.name
+            if($name -cnotin @('records.jsonl','coverage.jsonl','summary.json') -or $seen.ContainsKey($name) -or $hashes[$name] -cne $payload.sha256 -or $lengths[$name] -ne $payload.bytes){throw 'Payload hash/size/name mismatch.'};$seen[$name]=$true
+        }
+        $parent=$Root
+        foreach($segment in $relative.Split('/')){
+            $parent=Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/drives/$DriveId/items/$($parent.id):/$segment" -Method GET -Headers $Headers
+            if($null -eq $parent.folder -or $parent.name -cne $segment -or $parent.id -notmatch '^[A-Za-z0-9_!.,-]{1,256}$'){throw 'Reviewed folder missing or changed.'}
+        }
+        if($parent.id -cne $target.folderItemId){throw 'Reviewed target item changed.'}
+        foreach($name in 'records.jsonl','coverage.jsonl','summary.json','manifest.json'){
+            $uri="https://graph.microsoft.com/v1.0/drives/$DriveId/items/$($parent.id):/$name"
+            $exists=$true
+            try{$item=Invoke-RestMethod -Uri $uri -Method GET -Headers $Headers}catch{if((Shared-HttpStatus $_) -ne 404){throw};$exists=$false}
+            $created=$false
+            if(-not $exists){
+                $bytes=[byte[]]::new([int]$lengths[$name]);$streams[$name].Position=0;$streams[$name].ReadExactly($bytes)
+                try{$null=Invoke-RestMethod -Uri ($uri+':/content?@microsoft.graph.conflictBehavior=fail') -Method PUT -Headers $Headers -ContentType 'application/octet-stream' -Body $bytes;$created=$true;$uploaded++}
+                catch{if((Shared-HttpStatus $_) -ne 409){throw}}
+                finally{$bytes=$null}
+                $item=Invoke-RestMethod -Uri $uri -Method GET -Headers $Headers
+            }
+            if($null -eq $item.file -or $item.name -cne $name -or $item.size -ne $lengths[$name] -or -not $item.id){throw 'Remote file metadata mismatch; preserved without overwrite.'}
+            $url=[uri]$item.'@microsoft.graph.downloadUrl'
+            if(-not $url.IsAbsoluteUri -or $url.Scheme -ne 'https' -or $url.UserInfo -or -not $url.IsDefaultPort){throw 'Invalid download URL.'}
+            $temp=Join-Path $StateDirectory ('batch-download-'+[guid]::NewGuid().ToString('N')+'.tmp')
+            try{
+                try{$null=Invoke-WebRequest -Uri $url.AbsoluteUri -Method GET -OutFile $temp -MaximumRedirection 5 -TimeoutSec 120}catch{throw 'Batch verification download failed; URL omitted.'}
+                $actual=(Get-FileHash -LiteralPath $temp -Algorithm SHA256).Hash
+                if((Get-Item -LiteralPath $temp).Length -ne $lengths[$name] -or $actual -cne $hashes[$name]){throw 'Remote downloaded hash/size mismatch; no overwrite.'}
+            }finally{if([IO.File]::Exists($temp)){[IO.File]::Delete($temp)}}
+            $rows+= [ordered]@{Name=$name;ItemId=$item.id;Bytes=$lengths[$name];Sha256=$actual;UploadedThisRun=$created;DownloadHashVerified=$true}
+        }
+        $result=[ordered]@{Test='W05F-RealBatchUpload';Version='0.5.0';Outcome='Verified';Authentication='CertificateAppOnly';BatchId=$BatchId;ManifestSha256=$ExpectedManifestSha256
+            TenantId=$TenantId.ToString();ClientId=$ClientId.ToString();ReportingDeviceId=$state.reportingDeviceId;TargetRelativePath=$relative;TargetItemId=$parent.id
+            FilesUploaded=$uploaded;FilesVerified=4;Files=$rows;ManifestPublishedLast=$true;LocalBatchPreserved=$true;LocalDeliveryState='PendingUpload';TransportState='RemoteHashVerified';VerifiedUtc=[DateTimeOffset]::UtcNow.ToString('o')
+            PortalIngestionConfirmed=$false;TargetAclReviewAcknowledged=$true;CertificatesCreated=0;AdministrativeLoginUsed=$false;TokenReturnedToConsole=$false}
+        $receiptPath=Join-Path $StateDirectory ('receipt-'+$BatchId+'.json');$tempReceipt=$receiptPath+'.tmp'
+        [IO.File]::WriteAllText($tempReceipt,($result|ConvertTo-Json -Depth 8),[Text.UTF8Encoding]::new($false))
+        if([IO.File]::Exists($receiptPath)){[IO.File]::Replace($tempReceipt,$receiptPath,[NullString]::Value)}else{[IO.File]::Move($tempReceipt,$receiptPath)}
+        $result.ReceiptPath=$receiptPath
+        return $result
+    }finally{foreach($stream in $streams.Values){$stream.Dispose()}}
+}
+
 function Shared-PrepareBatchTarget($Root,$List,$Headers){
     if($state.reportingDeviceId){
         if([guid]$state.reportingDeviceId -eq [guid]::Empty -or $state.reportingDeviceName -cne $env:COMPUTERNAME){throw 'Reporting identity differs from this computer. Do not copy device identity with the shared credential.'}
@@ -259,7 +329,7 @@ try{
             $result=[ordered]@{Test='W02B2-CertificateAuthentication';Outcome='TokenAcquired';Authentication='CertificateAppOnly'
                 TenantId=$TenantId.ToString();ClientId=$ClientId.ToString();CertificateThumbprint=$cert.Thumbprint
                 TokenReturnedToConsole=$false;ExpiresInSeconds=$response.expires_in;SharePointAccessTested=$false;FilesUploaded=0}
-            if($Step -in 'TestAccess','UploadProbe','PrepareBatchTarget'){
+            if($Step -in 'TestAccess','UploadProbe','PrepareBatchTarget','UploadBatch'){
                 $headers=@{Authorization='Bearer '+$response.access_token}
                 try{
                     $list=Invoke-RestMethod -Uri ("https://graph.microsoft.com/v1.0/sites/$SiteId/lists/$ListId"+'?$select=id,displayName,webUrl,list') -Method GET -Headers $headers
@@ -287,12 +357,13 @@ try{
                         ControlExistenceVerifiedByThisScript=$false;WriteAccessTested=$false;OrdinaryUserAclReviewed=$false
                         AdministrativeLoginUsed=$false;TokenReturnedToConsole=$false;SharePointChanged=$false;CertificatesCreated=0;FilesUploaded=0}
                     if($Step -eq 'UploadProbe'){$result=Shared-ProbeUpload $root $list $headers}
+                    if($Step -eq 'UploadBatch'){$result=Shared-UploadBatch $root $list $headers}
                     if($Step -eq 'PrepareBatchTarget'){$result=Shared-PrepareBatchTarget $root $list $headers}
                 }finally{$headers.Clear()}
             }
         }finally{$form.Clear();$assertion=$null;$response=$null}
     }
-    $headline=if($Step -eq 'PrepareBatchTarget'){'=== WORK W05D PARA COMPARTIR ==='}elseif($Step -eq 'UploadProbe'){'=== WORK W04 PARA COMPARTIR ==='}else{'=== WORK W02B PARA COMPARTIR ==='}
+    $headline=if($Step -eq 'UploadBatch'){'=== WORK W05F PARA COMPARTIR ==='}elseif($Step -eq 'PrepareBatchTarget'){'=== WORK W05D PARA COMPARTIR ==='}elseif($Step -eq 'UploadProbe'){'=== WORK W04 PARA COMPARTIR ==='}else{'=== WORK W02B PARA COMPARTIR ==='}
     Write-Host $headline -ForegroundColor Magenta
     Write-Host ($result|ConvertTo-Json -Depth 6) -ForegroundColor Magenta
     [pscustomobject]$result
