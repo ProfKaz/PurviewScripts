@@ -46,3 +46,62 @@ installation of that version. An upgrade needs a separate deployment.
 Portal viewers do not run this installer or install Node, npm, or PowerShell.
 Placement and configuration of the web part on the protected page follow
 installation.
+
+## Bootstrap the SharePoint App Catalog
+
+1. Sign in to the SharePoint admin center as a SharePoint Administrator.
+   Open **More features > Apps > Open**. This opens the tenant App Catalog
+   or starts provisioning it if it is missing. Wait until it opens.
+2. Use an account that is also a site collection administrator of the
+   tenant App Catalog and the target site. In PowerShell 7, run the
+   following with the tenant's own URLs and existing Setup client ID.
+
+```powershell
+$ErrorActionPreference = 'Stop'
+Import-Module PnP.PowerShell -RequiredVersion 3.2.0
+$adminUrl = 'https://contoso-admin.sharepoint.com'
+$siteUrl = 'https://contoso.sharepoint.com/sites/ScannerPortalPilot'
+$auth = @{
+    Tenant = '<tenant GUID or verified tenant domain>'
+    ClientId = '<Setup application client GUID>'
+    Interactive = $true
+    ReturnConnection = $true
+}
+$admin = Connect-PnPOnline -Url $adminUrl @auth
+$tenantCatalog = Get-PnPTenantAppCatalogUrl -Connection $admin
+if (-not $tenantCatalog) {
+    throw 'Open Apps in the SharePoint admin center and wait for the tenant catalog.'
+}
+
+$site = Connect-PnPOnline -Url $siteUrl @auth
+$catalog = Get-PnPSiteCollectionAppCatalog -CurrentSite -Connection $site
+if (-not $catalog) {
+    Add-PnPSiteCollectionAppCatalog -Site $siteUrl -Connection $admin
+    for ($attempt = 0; $attempt -lt 12 -and -not $catalog; $attempt++) {
+        Start-Sleep -Seconds 5
+        $catalog = Get-PnPSiteCollectionAppCatalog -CurrentSite -Connection $site
+    }
+}
+if (-not $catalog) {
+    throw 'The site catalog is not registered yet. Wait and run the check again.'
+}
+$status = ([string]$catalog.ErrorMessage).Trim()
+if ($status -and $status -ne 'Success') {
+    throw "SharePoint App Catalog status: $status"
+}
+$null = Get-PnPApp -Scope Site -Connection $site -ErrorAction Stop
+[pscustomobject]@{
+    TenantCatalogUrl = $tenantCatalog
+    SiteUrl = $siteUrl
+    CatalogReadable = $true
+}
+```
+
+A null TenantAppCatalog error can occur before SharePoint can read the site
+catalog registration. Check the tenant catalog first. PnP can return
+ErrorMessage=Success for a healthy catalog. A successful Get-PnPApp call
+confirms that the site catalog is readable even when it contains no packages.
+Continue with Install-ScannerPortalReport.ps1 after CatalogReadable=True.
+
+[Provision the tenant App Catalog](https://learn.microsoft.com/en-us/sharepoint/dev/spfx/set-up-your-developer-tenant#create-app-catalog-site)
+and [enable a site collection App Catalog](https://learn.microsoft.com/en-us/sharepoint/dev/general-development/site-collection-app-catalog).
