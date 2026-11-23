@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.2.1
+.VERSION 0.2.2
 .GUID 7bb7b04d-f2b8-4d7d-8840-ec9a8972352b
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.2.2 Reuse the verified current package when the catalog omits ProductId.
 0.2.1 Recover a verified prior catalog file when app metadata does not match.
 0.2.0 Install or upgrade to the English report web part.
 0.1.1 Use the site app catalog API and preserve provider errors.
@@ -81,10 +82,20 @@ if (-not $DownloadOnly) {
                 } finally {
                     $stream.Dispose()
                 }
-                if ($existingHash -cne 'C9645145783F9DDFDC25ECCC5D2560A14B6535572EDC11D5CF2B7743EA699796') {
+                if ($existingHash -ceq $expectedHash) {
+                    $matches = @($apps | Where-Object {
+                        $_.Title -eq 'Endpoint MIP Scanner - Reports' -and
+                        [version]$_.AppCatalogVersion -eq $version
+                    })
+                    if ($matches.Count -ne 1) {
+                        throw 'The verified package is already in the catalog, but its app record could not be identified uniquely.'
+                    }
+                    $app = $matches[0]
+                } elseif ($existingHash -ceq 'C9645145783F9DDFDC25ECCC5D2560A14B6535572EDC11D5CF2B7743EA699796') {
+                    $overwritePrior = $true
+                } else {
                     throw "Catalog file already exists without matching app metadata. Its hash is $existingHash. No overwrite was attempted."
                 }
-                $overwritePrior = $true
             }
         }
 
@@ -113,17 +124,19 @@ if (-not $DownloadOnly) {
         } else {
             throw 'The installed version changed during deployment.'
         }
-        for ($attempt = 0; $attempt -lt 12; $attempt++) {
+        for ($attempt = 0; $attempt -lt 24; $attempt++) {
             $installed = Get-PnPApp -Identity $app.Id -Scope Site -Connection $connection
             if ($installed.Deployed -and $installed.CurrentVersionDeployed -ne $false -and
                 $installed.InstalledVersion -and [version]$installed.InstalledVersion -eq $version) {
                 break
             }
-            if ($attempt -lt 11) { Start-Sleep -Seconds 5 }
+            if ($attempt -lt 23) { Start-Sleep -Seconds 5 }
         }
         if (-not $installed.Deployed -or $installed.CurrentVersionDeployed -eq $false -or
             -not $installed.InstalledVersion -or [version]$installed.InstalledVersion -ne $version) {
-            throw 'The expected installed version could not be verified.'
+            throw ("The expected installed version could not be verified. AppId={0}; CatalogVersion={1}; InstalledVersion={2}; Deployed={3}; CurrentVersionDeployed={4}; CanUpgrade={5}; SharePointError={6}" -f
+                $app.Id, $installed.AppCatalogVersion, $installed.InstalledVersion, $installed.Deployed,
+                $installed.CurrentVersionDeployed, $installed.CanUpgrade, $installed.ErrorMessage)
         }
         $result.SiteUrl = $web.Url
         $result.CatalogScope = 'Site'
