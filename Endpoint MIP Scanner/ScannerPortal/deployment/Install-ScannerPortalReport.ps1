@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.2.0
+.VERSION 0.2.1
 .GUID 7bb7b04d-f2b8-4d7d-8840-ec9a8972352b
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.2.1 Recover a verified prior catalog file when app metadata does not match.
 0.2.0 Install or upgrade to the English report web part.
 0.1.1 Use the site app catalog API and preserve provider errors.
 0.1.0 Downloads the pinned W07B package and installs it through the site catalog.
@@ -67,8 +68,28 @@ if (-not $DownloadOnly) {
             throw 'The installed version is outside the supported upgrade path.'
         }
 
+        $overwritePrior = $false
         if (-not $app) {
-            $uploaded = Add-PnPApp -Path $package -Scope Site -Publish -Connection $connection
+            # The app metadata may omit the product GUID. Check the exact catalog
+            # filename before uploading, and require a known hash before overwrite.
+            $catalogPath = $SiteUrl.AbsolutePath.TrimEnd('/') + '/AppCatalog/' + [IO.Path]::GetFileName($package)
+            $catalogItem = Get-PnPFile -Url $catalogPath -AsListItem -Connection $connection -ErrorAction Stop
+            if ($catalogItem) {
+                $stream = Get-PnPFile -Url $catalogPath -AsMemoryStream -Connection $connection -ErrorAction Stop
+                try {
+                    $existingHash = (Get-FileHash -InputStream $stream -Algorithm SHA256).Hash
+                } finally {
+                    $stream.Dispose()
+                }
+                if ($existingHash -cne 'C9645145783F9DDFDC25ECCC5D2560A14B6535572EDC11D5CF2B7743EA699796') {
+                    throw "Catalog file already exists without matching app metadata. Its hash is $existingHash. No overwrite was attempted."
+                }
+                $overwritePrior = $true
+            }
+        }
+
+        if (-not $app) {
+            $uploaded = Add-PnPApp -Path $package -Scope Site -Overwrite:$overwritePrior -Publish -Connection $connection
             $app = Get-PnPApp -Identity $uploaded.Id -Scope Site -Connection $connection
         } elseif ([version]$app.AppCatalogVersion -eq $priorVersion) {
             $uploaded = Add-PnPApp -Path $package -Scope Site -Overwrite -Publish -Connection $connection
