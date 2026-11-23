@@ -15,9 +15,9 @@ test('reads totals and accepts unnamed detection types', () => {
   assert.equal(parseReport(item).ByExtension.reduce((sum, row) => sum + row.Files, 0), 2293);
 });
 test('rejects a report bound to a different acceptance', () => {
-  assert.throws(() => parseReport({ ...item, Title: 'other' }), /aceptación/);
+  assert.throws(() => parseReport({ ...item, Title: 'other' }), /acceptance record/);
 });
 test('rejects inconsistent aggregate totals', () => {
   const inconsistent = { ...report, ByOutcome: [{ Outcome: 'Responded', Files: 1 }] };
-  assert.throws(() => parseReport({ ...item, PortalReportJson: JSON.stringify(inconsistent) }), /totales/);
+  assert.throws(() => parseReport({ ...item, PortalReportJson: JSON.stringify(inconsistent) }), /Totals/);
 });

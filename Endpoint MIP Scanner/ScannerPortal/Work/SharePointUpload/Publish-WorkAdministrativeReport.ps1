@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.1.0
+.VERSION 0.1.1
 .GUID fceba35d-f548-410f-8dd1-41db6209d086
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.1.1 Use English for new report pages.
 0.1.0 Render one verified report as a restricted SharePoint pilot page.
 #>
 #Requires -Version 7.4
@@ -22,17 +23,17 @@ function ConvertTo-WorkReportHtml($Report) {
     $responded = ($Report.ByOutcome | Where-Object Outcome -eq 'Responded' | Measure-Object Files -Sum).Sum
     $noResponse = ($Report.ByOutcome | Where-Object Outcome -eq 'NoResponse' | Measure-Object Files -Sum).Sum
     $parts = @(
-        "<h2>Resumen del lote</h2><p><strong>$total archivos</strong> | $responded con respuesta | $noResponse sin respuesta</p>"
-        "<p>Errores de cobertura: $($Report.CoverageErrors). Tipos detectados: $(@($Report.BySit).Count).</p>"
-        '<h2>Archivos por resultado</h2><table><thead><tr><th>Resultado</th><th>Archivos</th></tr></thead><tbody>'
+        "<h2>Batch overview</h2><p><strong>$total files</strong> | $responded responded | $noResponse no response</p>"
+        "<p>Coverage errors: $($Report.CoverageErrors). Detected types: $(@($Report.BySit).Count).</p>"
+        '<h2>Files by outcome</h2><table><thead><tr><th>Outcome</th><th>Files</th></tr></thead><tbody>'
         foreach ($row in $Report.ByOutcome) {
             "<tr><td>$([Net.WebUtility]::HtmlEncode($row.Outcome))</td><td>$($row.Files)</td></tr>"
         }
-        '</tbody></table><h2>Archivos por extension</h2><table><thead><tr><th>Extension</th><th>Archivos</th></tr></thead><tbody>'
+        '</tbody></table><h2>Files by extension</h2><table><thead><tr><th>Extension</th><th>Files</th></tr></thead><tbody>'
         foreach ($row in $Report.ByExtension) {
             "<tr><td>$([Net.WebUtility]::HtmlEncode($row.Extension))</td><td>$($row.Files)</td></tr>"
         }
-        '</tbody></table><h2>Tipos de informacion confidencial</h2><p>Un archivo puede aparecer en varios tipos.</p><table><thead><tr><th>Tipo</th><th>Archivos</th><th>Coincidencias</th></tr></thead><tbody>'
+        '</tbody></table><h2>Sensitive information types</h2><p>A file can appear under multiple types.</p><table><thead><tr><th>Type</th><th>Files</th><th>Matches</th></tr></thead><tbody>'
         foreach ($row in ($Report.BySit | Sort-Object @{Expression='Files';Descending=$true}, SitId)) {
             $name = if ($row.Name) { $row.Name } else { $row.SitId }
             "<tr><td>$([Net.WebUtility]::HtmlEncode($name))</td><td>$($row.Files)</td><td>$($row.Matches)</td></tr>"
@@ -64,7 +65,7 @@ try {
 
     # Add an empty draft first. A matching filename is never replaced.
     $pageName = "ScannerPortalReport-$AcceptanceItemId.aspx"
-    $null = Add-PnPPage -Name $pageName -Title "Reporte de descubrimiento | Lote $AcceptanceItemId" -LayoutType Article -Connection $connection
+    $null = Add-PnPPage -Name $pageName -Title "Discovery report | Batch $AcceptanceItemId" -LayoutType Article -Connection $connection
     $pagePath = $SiteUrl.AbsolutePath.TrimEnd('/') + '/SitePages/' + $pageName
     $pageItem = Get-PnPFile -Url $pagePath -AsListItem -ThrowExceptionIfFileNotFound -Connection $connection
     $pageItem.BreakRoleInheritance($false, $false)

@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.1.0
+.VERSION 1.1.1
 
 .GUID 1f5569d4-deb5-44b3-8fca-307cc31b2746
 
@@ -21,7 +21,7 @@ Endpoint MIP Scanner component: ScannerPortal/deployment/New-ScannerPortalPilot.
 .NOTES
 HISTORY
 Script      : ScannerPortal/deployment/New-ScannerPortalPilot.ps1
-Version     : 1.1.0
+Version     : 1.1.1
 Tracking ID : 1f5569d4-deb5-44b3-8fca-307cc31b2746
 2026-11-18  Kaz Demos  First tracked suite release; preserves prior milestone implementation.
 #>
@@ -40,7 +40,7 @@ param(
     [Parameter(Mandatory)][uri]$AdminUrl,
     [Parameter(Mandatory)][uri]$SiteUrl,
     [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$Owner,
-    [ValidateNotNullOrEmpty()][string]$Title = 'Scanner Portal - Piloto',
+    [ValidateNotNullOrEmpty()][string]$Title = 'Scanner Portal - Pilot',
     [ValidateSet('Plan', 'Apply')][string]$Mode = 'Plan',
     [guid]$ClientId = [guid]::Empty,
     [string]$Tenant,

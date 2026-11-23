@@ -22,7 +22,7 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
     const itemId = Number(this.properties.acceptanceItemId);
     if (!/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(listId) ||
         !Number.isInteger(itemId) || itemId < 1 || itemId > 2147483647) {
-      this.root.render(React.createElement(ReportView, { error: 'Configura la lista de aceptaciones y el ID del lote en las propiedades.' }));
+      this.root.render(React.createElement(ReportView, { error: 'Set the acceptance list and item ID in the web part properties.' }));
       return;
     }
     this.root.render(React.createElement(ReportView, { key: request }));
@@ -36,14 +36,14 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
       const response = await this.context.spHttpClient.get(url, SPHttpClient.configurations.v1);
       if (!response.ok) {
         throw new Error([401, 403, 404].indexOf(response.status) !== -1
-          ? 'El lote no está disponible o tu cuenta no tiene acceso.'
-          : 'No se pudo cargar el reporte. Vuelve a intentar.');
+          ? 'This batch is unavailable or your account does not have access.'
+          : 'Could not load the report. Try again.');
       }
       const item = await response.json();
       const report = parseReport(item);
       if (this.request === request) this.root?.render(React.createElement(ReportView, { report, key: request }));
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudo cargar el reporte.';
+      const message = error instanceof Error ? error.message : 'Could not load the report.';
       if (this.request === request) this.root?.render(React.createElement(ReportView, { error: message, key: request }));
     }
   }
@@ -55,10 +55,10 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
   }
 
   protected getPropertyPaneConfiguration(): IPropertyPaneConfiguration {
-    return { pages: [{ header: { description: 'Selecciona un lote aceptado del sitio actual.' }, groups: [{
-      groupName: 'Origen del reporte', groupFields: [
-        PropertyPaneTextField('acceptanceListId', { label: 'GUID de ScannerPortalAcceptance' }),
-        PropertyPaneTextField('acceptanceItemId', { label: 'ID del registro de aceptación' })
+    return { pages: [{ header: { description: 'Select an accepted batch from the current site.' }, groups: [{
+      groupName: 'Report source', groupFields: [
+        PropertyPaneTextField('acceptanceListId', { label: 'ScannerPortalAcceptance list GUID' }),
+        PropertyPaneTextField('acceptanceItemId', { label: 'Acceptance item ID' })
       ]
     }] }] };
   }
