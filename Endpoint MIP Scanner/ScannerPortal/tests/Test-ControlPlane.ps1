@@ -27,7 +27,7 @@ function Disconnect-MgGraph {}
 function Get-MgContext {[pscustomobject]@{TenantId=$tenant.ToString()}}
 function Connect-PnPOnline {param($Url,$Tenant,$ClientId,[switch]$Interactive,[switch]$ReturnConnection) 'fixture-connection'}
 function Disconnect-PnPOnline {param($ErrorAction)}
-function Get-PnPList {param($Identity,$Includes,$Connection) [pscustomobject]@{Id=if($Identity -eq 'ScannerPortalConfig'){'config-list'}else{'landing-list'};BaseTemplate=101}}
+function Get-PnPList {param($Identity,$Includes,$Connection) [pscustomobject]@{Id=if($Identity -eq 'ScannerPortalConfig'){'config-list'}else{'landing-list'};BaseTemplate=101;RoleAssignments=@(if($Identity -eq 'ScannerPortalLanding'){$landingAssignment})}}
 $publisher = [guid]::NewGuid()
 $landingAssignment = [pscustomobject]@{
     Member = [pscustomobject]@{LoginName="i:0i.t|ms.sp.ext|$publisher@$tenant";PrincipalType='AppConsentPrincipal';Title='Existing publisher'}
@@ -36,7 +36,7 @@ $landingAssignment = [pscustomobject]@{
 function Get-PnPProperty {
     param($ClientObject,$Property,$Connection)
     if($Property -eq 'HasUniqueRoleAssignments'){return $true}
-    if($Property -eq 'RoleAssignments' -and $ClientObject.Id -eq 'landing-list'){return $landingAssignment}
+
     return $ClientObject.$Property
 }
 function Get-PnPSiteCollectionAdmin {param($Connection) [pscustomobject]@{LoginName='admin@example.invalid'}}

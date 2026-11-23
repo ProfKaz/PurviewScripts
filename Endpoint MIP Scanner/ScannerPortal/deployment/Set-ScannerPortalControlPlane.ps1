@@ -66,7 +66,8 @@ function Ensure-ControlFolder([string]$Drive,[string]$Parent,[string]$Name) {
 function Assert-ControlAcl($List,$Connection,[string]$LibraryName) {
     if (-not (Get-PnPProperty -ClientObject $List -Property HasUniqueRoleAssignments -Connection $Connection)) {throw 'Library inherits access. Review permissions first.'}
     $admins=@(Get-PnPSiteCollectionAdmin -Connection $Connection|ForEach-Object {$_.LoginName.ToLowerInvariant()})
-    foreach($assignment in (Get-PnPProperty -ClientObject $List -Property RoleAssignments -Connection $Connection)) {
+    $null=Get-PnPProperty -ClientObject $List -Property RoleAssignments -Connection $Connection
+    foreach($assignment in $List.RoleAssignments) {
         $null=Get-PnPProperty -ClientObject $assignment -Property RoleDefinitionBindings -Connection $Connection
         $roles=@(foreach($roleBinding in $assignment.RoleDefinitionBindings) {
             $null=Get-PnPProperty -ClientObject $roleBinding -Property RoleTypeKind -Connection $Connection
@@ -74,6 +75,7 @@ function Assert-ControlAcl($List,$Connection,[string]$LibraryName) {
         })
         if ($roles.Count -eq 0) {continue}
         $member=Get-PnPProperty -ClientObject $assignment -Property Member -Connection $Connection
+        $null=Get-PnPProperty -ClientObject $member -Property LoginName,Title,PrincipalType -Connection $Connection
         if ($script:AllowedControlApp -and $member.LoginName -match ('(^|\|)'+[regex]::Escape($script:AllowedControlApp)+'@')) {continue}
         $publisherLogin="i:0i.t|ms.sp.ext|$ExistingLandingPublisherClientId@$TenantId"
         if ($LibraryName -eq 'ScannerPortalLanding' -and $ExistingLandingPublisherClientId -ne [guid]::Empty -and
