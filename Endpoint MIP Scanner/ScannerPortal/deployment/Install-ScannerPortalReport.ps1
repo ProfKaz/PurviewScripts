@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.1.0
+.VERSION 0.1.1
 .GUID 7bb7b04d-f2b8-4d7d-8840-ec9a8972352b
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.1.1 Use the site app catalog API and preserve provider errors.
 0.1.0 Downloads the pinned W07B package and installs it through the site catalog.
 #>
 #Requires -Version 7.4
@@ -52,14 +53,9 @@ if (-not $DownloadOnly) {
     Import-Module PnP.PowerShell -RequiredVersion 3.2.0
     $connection = Connect-PnPOnline -Url $SiteUrl.AbsoluteUri -Tenant $TenantId -ClientId $PortalClientId -Interactive -ReturnConnection
     try {
-        $web = Get-PnPWeb -Includes Url,ServerRelativeUrl -Connection $connection
+        $web = Get-PnPWeb -Includes Url -Connection $connection
         if ($web.Url.TrimEnd('/') -ne $SiteUrl.AbsoluteUri.TrimEnd('/')) { throw 'Connected site differs from the requested site.' }
-        try {
-            $null = Get-PnPList -Identity ($web.ServerRelativeUrl.TrimEnd('/') + '/AppCatalog') -Connection $connection -ErrorAction Stop
-            $apps = @(Get-PnPApp -Scope Site -Connection $connection)
-        } catch {
-            throw [InvalidOperationException]::new('Cannot read the site collection App Catalog. Verify that a SharePoint administrator enabled it and that the signed-in account can manage it.', $_.Exception)
-        }
+        $apps = @(Get-PnPApp -Scope Site -Connection $connection -ErrorAction Stop)
         $app = $apps | Where-Object { ([string]$_.ProductId -eq [string]$productId) -or ([string]$_.Id -eq [string]$productId) } | Select-Object -First 1
         $alreadyInstalled = $false
         if ($app) {
