@@ -1,4 +1,6 @@
-﻿> Piloto administrado 1.0: [certificados, perfiles y entrega de informes](docs/MANAGED-ENDPOINTS.md). Administración mediante scripts; interfaz SPFx y aceptación/proyecciones centrales pendientes.
+﻿> Pista Work independiente: [subida básica de lotes existentes a SharePoint](Work/SharePointUpload/README.md). Empezar por W01 local; no requiere repetir ControlPlane ni enrolar certificados por equipo.
+
+> Piloto administrado 1.0: [certificados, perfiles y entrega de informes](docs/MANAGED-ENDPOINTS.md). Administración mediante scripts; interfaz SPFx y aceptación/proyecciones centrales pendientes.
 
 > Revisión de arquitectura del 20 de noviembre de 2026: [alcance del portal, identidades, configuración e ingesta](docs/PORTAL-FOCUS-2026-11.md). Propuesta documental separada del publicador; base Microsoft 365 E3 sin servicios Azure adicionales.
 

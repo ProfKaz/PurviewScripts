@@ -1,0 +1,13 @@
+{
+  "version": "2.0",
+  "bundles": {
+    "scanner-report-web-part": {
+      "components": [{
+        "entrypoint": "./lib/ScannerReportWebPart.js",
+        "manifest": "./src/ScannerReportWebPart.manifest.json"
+      }]
+    }
+  },
+  "externals": {},
+  "localizedResources": {}
+}
