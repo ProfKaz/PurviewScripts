@@ -1,6 +1,6 @@
-﻿<#PSScriptInfo
+<#PSScriptInfo
 
-.VERSION 1.3.0
+.VERSION 1.4.0
 
 .GUID 0576cc7a-692e-4876-bfe5-d1fb62a30116
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+2026-11-23  1.4.0  Program Files installation and user-context endpoint configuration.
 2026-11-20  1.3.0  Portal control plane and managed endpoint enrollment stages.
 2026-11-20  1.2.1  CurrentUser publisher credentials without local elevation.
 2026-11-20  1.2.0  Add Publisher stage for an existing portal site.
@@ -24,7 +25,7 @@ Endpoint MIP Scanner component: Install-EndpointMIPScanner.ps1.
 .NOTES
 HISTORY
 Script      : Install-EndpointMIPScanner.ps1
-Version     : 1.3.0
+Version     : 1.4.0
 Tracking ID : 0576cc7a-692e-4876-bfe5-d1fb62a30116
 2026-11-18  Kaz Demos  First tracked suite release; preserves prior milestone implementation.
 #>
@@ -34,7 +35,7 @@ Tracking ID : 0576cc7a-692e-4876-bfe5-d1fb62a30116
 param(
     [ValidatePattern('^[A-Za-z0-9._/-]+$')][string] $Ref = 'main',
     [string] $Destination,
-    [ValidateSet('Download','Local','MipApp','Portal','Publisher','ControlPlane','ManagedEndpoint','All')][string] $Stage = 'Local',
+    [ValidateSet('Download','Local','MipApp','Portal','Publisher','ControlPlane','ManagedEndpoint','EndpointInstall','EndpointConfigure','All')][string] $Stage = 'Local',
     [string] $DotNetPath,
     [guid] $TenantId = [guid]::Empty,
     [guid] $MipClientId = [guid]::Empty,
@@ -53,19 +54,39 @@ param(
     [guid] $RegistrationId = [guid]::Empty,
     [string] $EndpointDirectory,
     [switch] $AllowSharedIngress,
-    [switch] $RegisterTask
+    [switch] $RegisterTask,
+    [switch] $SyncOnly
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-if (-not $Destination) { $Destination = $PSScriptRoot }
 if (-not [Environment]::Is64BitProcess) { throw 'Use Windows PowerShell 5.1 x64.' }
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+if ($SyncOnly -and $Stage -ne 'EndpointConfigure') { throw 'SyncOnly requires EndpointConfigure.' }
+if ($Stage -in 'EndpointInstall','EndpointConfigure') {
+    if ($Destination) { throw 'Endpoint installation and configuration use the system Program Files directory.' }
+    $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
+    $elevated = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if ($Stage -eq 'EndpointInstall' -and -not $elevated) {
+        throw 'Run EndpointInstall once in an elevated Windows PowerShell 5.1 x64 session.'
+    }
+    if ($Stage -eq 'EndpointConfigure' -and $elevated) {
+        throw 'Run EndpointConfigure in a non-elevated session as the enrolled scanner user.'
+    }
+    $Destination = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'Endpoint MIP Scanner'
+}
+if (-not $Destination) { $Destination = $PSScriptRoot }
 $root = [IO.Path]::GetFullPath($Destination).TrimEnd('\')
 if ($root -eq [IO.Path]::GetPathRoot($root).TrimEnd('\')) { throw 'Choose a project directory, not a drive root.' }
-[void][IO.Directory]::CreateDirectory($root)
 $work = Join-Path $root '.endpoint-install'
-[void][IO.Directory]::CreateDirectory($work)
-$lock = [IO.File]::Open((Join-Path $work 'writer.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
+$machineBootstrap = Join-Path $work 'endpoint-bootstrap.json'
+function Assert-InstallPath([string] $Path) {
+    for ($parent = [IO.DirectoryInfo]::new($Path); $parent; $parent = $parent.Parent) {
+        if ($parent.Exists -and ($parent.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "Reparse directory in installation path: $($parent.FullName)"
+        }
+    }
+}
+
 
 function Get-BlobHash([string] $Path) {
     $bytes = [IO.File]::ReadAllBytes($Path)
@@ -140,6 +161,78 @@ function Install-AdministrativePowerShell {
     return $executable
 }
 
+if ($Stage -eq 'EndpointConfigure') {
+    Assert-InstallPath $work
+    $manifestPath = Join-Path $work 'files.json'
+    $statusPath = Join-Path $work 'status.json'
+    if (-not [IO.File]::Exists($manifestPath) -or -not [IO.File]::Exists($statusPath)) {
+        throw 'Run EndpointInstall before configuring this Windows user.'
+    }
+    $installed = Get-Content -LiteralPath $statusPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $verified = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($installed.Status -ne 'Completed' -or $installed.Stage -ne 'EndpointInstall' -or
+        $installed.Commit -ne $verified.Commit -or -not $verified.Files.Count) {
+        throw 'Machine installation is incomplete. Rerun EndpointInstall.'
+    }
+    foreach ($entry in $verified.Files) {
+        $path = [IO.Path]::GetFullPath((Join-Path $root $entry.Path))
+        if (-not $path.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid installed manifest path.' }
+        Assert-InstallPath ([IO.Path]::GetDirectoryName($path))
+        if (-not [IO.File]::Exists($path) -or ([IO.File]::GetAttributes($path) -band [IO.FileAttributes]::ReparsePoint) -or
+            (Get-BlobHash $path) -ne $entry.GitBlobSha1) {
+            throw "Installed component is missing or differs: $($entry.Path). Rerun EndpointInstall."
+        }
+    }
+
+    Import-Module (Join-Path $root 'ScannerPortal/src/ScannerPortal.Endpoint.psm1') -Force
+    if (-not $EndpointDirectory) { $EndpointDirectory = Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner/ManagedEndpoint' }
+    $EndpointDirectory = Assert-PortalDirectory $EndpointDirectory
+    $registration = Join-Path $EndpointDirectory 'registration.json'
+    if (-not $SiteUrl) { $SiteUrl = (Read-Host 'SharePoint portal site URL').Trim() }
+    if (-not $SiteUrl) { throw 'Enter the SharePoint portal site URL.' }
+
+    if (-not $BootstrapPath -and [IO.File]::Exists($machineBootstrap)) { $BootstrapPath = $machineBootstrap }
+    if ($BootstrapPath) {
+        $bootstrap = Read-PortalJson $BootstrapPath
+    } elseif ([IO.File]::Exists($registration)) {
+        $bootstrap = (Read-PortalJson $registration).bootstrap
+    } else {
+        $BootstrapPath = (Read-Host 'Path to endpoint-bootstrap.json from the portal administrator').Trim().Trim('"')
+        if (-not $BootstrapPath) { throw 'An administrator-provided endpoint-bootstrap.json is required for first enrollment.' }
+        $bootstrap = Read-PortalJson $BootstrapPath
+    }
+    Assert-PortalBootstrap $bootstrap
+    if (([uri]$SiteUrl).AbsoluteUri.TrimEnd('/') -ne ([uri]$bootstrap.siteUrl).AbsoluteUri.TrimEnd('/')) {
+        throw 'The requested portal URL differs from the enrollment bootstrap.'
+    }
+
+    if (-not [IO.File]::Exists($registration)) {
+        if ($SyncOnly -or $RegisterTask) { throw 'Enroll this Windows user and obtain portal approval before synchronizing or registering the task.' }
+        & (Join-Path $root 'ScannerPortal/deployment/Install-ScannerPortalEndpoint.ps1') -BootstrapPath $BootstrapPath -Directory $EndpointDirectory
+        return
+    }
+    $saved = Read-PortalJson $registration
+    foreach ($key in $bootstrap.Keys) {
+        if ($saved.bootstrap[$key] -cne $bootstrap[$key]) { throw 'The bootstrap differs from the enrolled portal.' }
+    }
+    if ($RegisterTask) {
+        if (-not $BootstrapPath) { throw 'Supply the existing endpoint-bootstrap.json with RegisterTask.' }
+        & (Join-Path $root 'ScannerPortal/deployment/Install-ScannerPortalEndpoint.ps1') -BootstrapPath $BootstrapPath -Directory $EndpointDirectory -RegisterTask
+    } else {
+        & (Join-Path $root 'ScannerPortal/Invoke-ScannerPortalEndpoint.ps1') -Directory $EndpointDirectory -SyncOnly
+    }
+
+    return
+}
+
+Assert-InstallPath $work
+[void][IO.Directory]::CreateDirectory($work)
+$lockPath = Join-Path $work 'writer.lock'
+if ([IO.File]::Exists($lockPath) -and ([IO.File]::GetAttributes($lockPath) -band [IO.FileAttributes]::ReparsePoint)) {
+    throw 'Reparse installation lock is not allowed.'
+}
+$lock = [IO.File]::Open($lockPath, 'OpenOrCreate', 'ReadWrite', 'None')
+
 try {
     $repository = 'ProfKaz/PurviewScripts'
     $headers = @{ 'User-Agent' = 'EndpointMIPScanner-Installer'; Accept = 'application/vnd.github+json' }
@@ -154,7 +247,7 @@ try {
         $_.type -eq 'blob' -and $_.mode -in '100644','100755' -and $_.path.StartsWith($prefix)
     })
     if ($files.Count -eq 0) { throw 'Suite not found in this reference.' }
-    Write-Host "Endpoint MIP Scanner 1.3.0 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
+    Write-Host "Endpoint MIP Scanner 1.4.0 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
     Write-Host "Verifying $($files.Count) suite files in $root"
     $stamp = [guid]::NewGuid().ToString('N')
     $staging = Join-Path $work $stamp
@@ -183,13 +276,16 @@ try {
             $encoded = ($entry.path.Split('/') | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/'
             Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/$repository/$sha/$encoded" -OutFile $temporary
             if ((Get-BlobHash $temporary) -ne $entry.sha) { throw "Download hash mismatch: $relative" }
-            if ([IO.File]::Exists($target) -and $relative -match '(^|/)[Cc]onfig/') {
+            if ($Stage -ne 'EndpointInstall' -and [IO.File]::Exists($target) -and $relative -match '(^|/)[Cc]onfig/') {
                 $actualTarget = "$target.distribution"
                 $preserved = $true
             }
             $downloads.Add(@{ Temp = $temporary; Target = $actualTarget })
         }
         $manifest.Add(@{ Path = $relative; GitBlobSha1 = $entry.sha; LocalConfigurationPreserved = $preserved })
+    }
+    if ($Stage -eq 'EndpointInstall') {
+        Write-SetupJson (Join-Path $work 'status.json') @{ Status = 'Publishing'; Stage = $Stage; Commit = $sha }
     }
     # Every download is verified before publishing. A rerun reconciles interrupted publication.
     foreach ($item in $downloads) {
@@ -204,13 +300,13 @@ try {
     }
     Write-SetupJson (Join-Path $work 'files.json') @{ Repository = $repository; Commit = $sha; Files = $manifest.ToArray() }
     $state = [ordered]@{
-        InstallId = $stamp; SuiteVersion = '1.3.0'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
+        InstallId = $stamp; SuiteVersion = '1.4.0'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
         Completed = @(); Status = 'Running'; RestartRequired = $false; VisualCppPackageSha256 = $null
     }
     $state.Completed += 'VerifiedDownload'
     Write-Host "Verified suite. Published $($downloads.Count) changed files."
     Write-SetupJson (Join-Path $work 'status.json') $state
-    if ($Stage -ne 'Download') {
+    if ($Stage -notin 'Download','EndpointInstall') {
         if ($Stage -notin 'Publisher','ControlPlane','ManagedEndpoint') {
         Install-VisualCpp
         $sdkParameters = @{ Ref = $sha; Destination = $root }
@@ -293,6 +389,22 @@ try {
             Invoke-ChildScript (Join-Path $PSHOME 'powershell.exe') (Join-Path $root 'ScannerPortal/deployment/Install-ScannerPortalEndpoint.ps1') $parameters
             $state.Completed += 'ManagedEndpointEnrollment'
         }
+    }
+    if ($Stage -eq 'EndpointInstall') {
+        Invoke-ChildScript (Join-Path $PSHOME 'powershell.exe') (Join-Path $root 'LocalMIPScanner.WinPS51/tests/Test-StateFormat.ps1') @{}
+        $state.Completed += 'ScannerStateSmokeTest'
+        if ($BootstrapPath) {
+            Import-Module (Join-Path $root 'ScannerPortal/src/ScannerPortal.Endpoint.psm1') -Force
+            $bootstrap = Read-PortalJson $BootstrapPath
+            Assert-PortalBootstrap $bootstrap
+            if ([IO.File]::Exists($machineBootstrap) -and
+                ([IO.File]::GetAttributes($machineBootstrap) -band [IO.FileAttributes]::ReparsePoint)) {
+                throw 'Reparse machine bootstrap is not allowed.'
+            }
+            Write-PortalJson $bootstrap $machineBootstrap
+            $state.Completed += 'MachineBootstrap'
+        }
+        $state.InstallDirectory = $root
     }
     $state.Status = 'Completed'
     $dependencyEvidence = @{

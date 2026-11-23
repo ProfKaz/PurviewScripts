@@ -1,4 +1,4 @@
-﻿# Portal y endpoints administrados — piloto 1.0
+# Portal y endpoints administrados — piloto 1.0
 
 ## Alcance implementado
 
@@ -18,6 +18,40 @@ La administración de perfiles se realiza mediante scripts y bibliotecas SharePo
 ## Preparación y pruebas secuenciales
 
 Usar Windows PowerShell 5.1 x64 normal en C:\Deploy\Endpoint MIP Scanner. El instalador abre su runtime PS7 portátil para administración, sin solicitar administrador local. El registro inicial sí requiere una cuenta Microsoft 365 autorizada para registrar aplicaciones, consentir permisos y conceder acceso en el sitio. Deben existir las bibliotecas Foundation con acceso restringido; el script se detiene ante herencia o accesos sustantivos ajenos a administradores del sitio. No elimina permisos existentes para forzar el resultado.
+
+### Instalación en Program Files para el piloto W08
+
+Descargar `Install-EndpointMIPScanner.ps1` del mismo commit que se indica en `-Ref`.
+Desde Windows PowerShell 5.1 x64 elevado ejecutar el instalador por su ruta absoluta:
+
+```powershell
+& $installer -Ref $releaseCommit -Stage EndpointInstall -BootstrapPath $bootstrap
+```
+
+Esta etapa verifica los archivos contra GitHub, instala en `%ProgramFiles%\Endpoint MIP Scanner`
+y ejecuta la prueba local del formato de estado. Si TI entrega el bootstrap mediante ese parámetro, el instalador valida y guarda sus identificadores públicos en Program Files. El runner administrado de este piloto usa
+Windows PowerShell 5.1 y .NET Framework integrados. El SDK de laboratorio y las herramientas
+administrativas de Entra/SPO se instalan mediante sus etapas independientes.
+
+Después, en Windows PowerShell 5.1 x64 **sin elevación**, con la cuenta que ejecutará el escáner:
+
+```powershell
+$installed = Join-Path $env:ProgramFiles 'Endpoint MIP Scanner\Install-EndpointMIPScanner.ps1'
+& $installed -Stage EndpointConfigure
+```
+
+El comando verifica los componentes instalados, solicita la URL del sitio y, en el primer
+registro, si TI no lo dejó instalado, la ruta al `endpoint-bootstrap.json` entregado por el administrador. El archivo
+contiene los identificadores públicos del portal; la URL y el bootstrap deben coincidir.
+El usuario de Windows no necesita acceso directo al sitio. El operador usa `RequestPath`
+y `RegistrationId` para aprobar el certificado público y asignar el perfil (pasos 3 y 4).
+El certificado privado y los datos operativos quedan en el perfil del usuario.
+
+Después de la asignación, repetir `EndpointConfigure -SyncOnly` como ese usuario y verificar
+`profileSource = Portal`, la versión esperada y `scanState = SyncOnly`. Con el perfil pausado,
+la prueba solo descarga y verifica los datos de configuración. Cuando corresponda, usar
+`EndpointConfigure -RegisterTask` para validar nuevamente la descarga
+y registrar la tarea limitada de inicio de sesión.
 
 ### 1. Actualizar e inicializar una sola vez
 
