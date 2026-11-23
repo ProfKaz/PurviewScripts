@@ -292,3 +292,14 @@ The page is a snapshot and uses the native text part. A pre-existing page
 with the same name is not overwritten. If a run stops after creating a draft,
 inspect that draft and its permissions before retrying. Validate the rendered
 page with the administrator and direct URL denial with an ordinary user.
+
+### W07D1 second batch for report history
+
+Run New-WorkHistoryPilotBatch.ps1 in Windows PowerShell 5.1 with the tenant
+GUID and the installed LocalMIPReporting.psm1 path. It verifies a synthetic
+sealed batch containing three files, two responses, one no response, one file
+with a detection and zero coverage errors. The test uses the existing sealed
+batch contract and keeps the fixture in a separate local pilot outbox. Repeating
+with the same tenant and pilot directory reuses the batch identity and manifest.
+Prepare the SharePoint target, review its ACL and then upload and accept the
+batch in separate steps before configuring it in the report selector.

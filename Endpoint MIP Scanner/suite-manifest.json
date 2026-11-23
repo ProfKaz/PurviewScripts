@@ -373,6 +373,11 @@
       "Path": "ScannerPortal/deployment/Install-ScannerPortalReport.ps1",
       "Version": "0.2.2",
       "TrackingId": "7bb7b04d-f2b8-4d7d-8840-ec9a8972352b"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/New-WorkHistoryPilotBatch.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "3772dfe7-279e-497e-a6ba-91288b2822ef"
     }
   ],
   "Dependencies": [
