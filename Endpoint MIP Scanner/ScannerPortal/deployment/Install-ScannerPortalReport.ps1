@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.3.0
+.VERSION 0.4.0
 .GUID 7bb7b04d-f2b8-4d7d-8840-ec9a8972352b
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.4.0 Install the read-only published profile preview.
 0.3.0 Install the report history selector, upgrading either previous pilot package.
 0.2.2 Reuse the verified current package when the catalog omits ProductId.
 0.2.1 Recover a verified prior catalog file when app metadata does not match.
@@ -21,11 +22,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$version = [version]'0.3.0.0'
-$priorVersions = @([version]'0.1.0.0', [version]'0.2.0.0')
+$version = [version]'0.4.0.0'
+$priorVersions = @([version]'0.1.0.0', [version]'0.2.0.0', [version]'0.3.0.0')
 $productId = [guid]'5670f3cc-719f-44e2-a809-b9ddd68f674a'
-$expectedHash = 'D15B1AB2293416D8C171DADB69AB6F291CDFE5E71042D184A7812445C441FA32'
-$url = 'https://raw.githubusercontent.com/ProfKaz/PurviewScripts/9f7ff4a5ba0a641661b630ea76b9b549c7ef48c4/Endpoint%20MIP%20Scanner/ScannerPortal/ui/packages/scanner-report-0.3.0.sppkg'
+$expectedHash = '37AF747ED9B9CE8EBEFD0180CC33BDC4544834EA9DE9321CC456B3305A123289'
+$url = 'https://raw.githubusercontent.com/ProfKaz/PurviewScripts/5ac0aa0560f5b405cfc3113b71e789ba0fb10890/Endpoint%20MIP%20Scanner/ScannerPortal/ui/packages/scanner-report-0.4.0.sppkg'
 if (-not $DownloadOnly) {
     if ($TenantId -eq [guid]::Empty -or $PortalClientId -eq [guid]::Empty -or
         $SiteUrl.Scheme -ne 'https' -or $SiteUrl.Host -notmatch '^[a-z0-9-]+\.sharepoint\.com$' -or
@@ -92,7 +93,7 @@ if (-not $DownloadOnly) {
                         throw 'The verified package is already in the catalog, but its app record could not be identified uniquely.'
                     }
                     $app = $matches[0]
-                } elseif ($existingHash -cin @('C9645145783F9DDFDC25ECCC5D2560A14B6535572EDC11D5CF2B7743EA699796', 'CE9BBA15A5613AA884B017B31F5FCC9405F69AE7C8B94FE32BEFF17256CFAB49')) {
+                } elseif ($existingHash -cin @('C9645145783F9DDFDC25ECCC5D2560A14B6535572EDC11D5CF2B7743EA699796', 'CE9BBA15A5613AA884B017B31F5FCC9405F69AE7C8B94FE32BEFF17256CFAB49', 'D15B1AB2293416D8C171DADB69AB6F291CDFE5E71042D184A7812445C441FA32')) {
                     $overwritePrior = $true
                 } else {
                     throw "Catalog file already exists without matching app metadata. Its hash is $existingHash. No overwrite was attempted."
@@ -145,5 +146,5 @@ if (-not $DownloadOnly) {
         Disconnect-PnPOnline -ErrorAction SilentlyContinue
     }
 }
-Write-Host '=== WORK W07B INSTALACION PARA COMPARTIR ===' -ForegroundColor Magenta
+Write-Host '=== WORK W07B INSTALLATION FOR SHARING ===' -ForegroundColor Magenta
 Write-Host ($result | ConvertTo-Json) -ForegroundColor Magenta

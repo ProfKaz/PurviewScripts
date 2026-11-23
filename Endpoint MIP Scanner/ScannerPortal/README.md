@@ -46,3 +46,17 @@ pwsh -NoProfile -File ./ScannerPortal/tests/Test-ActivityScope.ps1
 - El éxito de exportación requiere publicación completa; el checkpoint se confirma después.
 - Cada resultado conserva su procedencia. Las reglas locales no se presentan como SIT oficiales equivalentes sin validación.
 - Los milestones del portal usan prefijo `SP` para no confundirse con M0–M6 del scanner.
+
+## Published profile preview (W08B.5)
+
+Install site package 0.4.0.0 using `deployment/Install-ScannerPortalReport.ps1` and the existing Setup application. Edit the restricted report page, open the web part properties, and set **Configuration preview → Published profile path** to a revision under `ScannerPortalConfig`. Save and republish the page. A blank property keeps the existing report-only layout.
+
+For the pilot, use:
+
+```text
+profiles/workstations-audit-pilot/1.0.0/7762E17DBF7CCE72358C025A1BC40AC7A66C0174DE91013718DA6DE44DA12006.json
+```
+
+- As an administrator, check **Configuration** for **SHA-256 verified**, **Paused**, and **Content audit: Disabled**, plus the expected root, extensions and exclusions. Confirm both existing batches still load in **Reports**.
+- As an ordinary account, check that the restricted page and direct profile URL are denied. SharePoint authorizes both reads using the signed-in session. Keep the existing site and library ACLs.
+- The preview displays the pinned published revision. Assignment status is not evaluated. Editing profiles, publishing revisions and assigning endpoints are separate steps.
