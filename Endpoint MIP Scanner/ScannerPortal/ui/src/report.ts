@@ -29,3 +29,18 @@ export function parseReport(item: { Title: string; BatchId: string; ManifestSha2
   }
   return report;
 }
+
+export function parseAcceptanceIds(defaultId: string, history: string): number[] {
+  const input = [defaultId, ...(history.trim() ? history.split(',') : [])];
+  if (input.length > 10) throw new Error('Configure at most ten acceptance items, including the default.');
+  const ids: number[] = [];
+  for (const entry of input) {
+    const value = entry.trim();
+    const id = Number(value);
+    if (!/^\d+$/.test(value) || !Number.isInteger(id) || id < 1 || id > 2147483647) {
+      throw new Error('Acceptance item IDs must be positive integers.');
+    }
+    if (ids.indexOf(id) === -1) ids.push(id);
+  }
+  return ids;
+}

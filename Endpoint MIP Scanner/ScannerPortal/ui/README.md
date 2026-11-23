@@ -33,7 +33,7 @@ using the existing Setup app for the one-time interactive administrator
 sign-in. DownloadOnly downloads and verifies without requiring PnP.
 The site collection App Catalog must already be enabled. The script uploads
 and installs at Site scope, verifies the version, and reuses an existing
-installation of that version. It also supports upgrading the installed pilot from 0.1.0.0 to 0.2.0.0.
+installation of that version. It supports upgrading pilot versions 0.1.0.0 and 0.2.0.0 to 0.3.0.0.
 Portal viewers do not run this installer or install Node, npm, or PowerShell.
 Placement and configuration of the web part on the protected page follow
 installation.
@@ -96,3 +96,17 @@ Continue with Install-ScannerPortalReport.ps1 after CatalogReadable=True.
 
 [Provision the tenant App Catalog](https://learn.microsoft.com/en-us/sharepoint/dev/spfx/set-up-your-developer-tenant#create-app-catalog-site)
 and [enable a site collection App Catalog](https://learn.microsoft.com/en-us/sharepoint/dev/general-development/site-collection-app-catalog).
+
+## W07D batch history
+
+In the web part properties, keep acceptance item ID 1 and enter 2 under
+**Additional acceptance item IDs**. The pilot shows explicitly configured
+IDs only, up to ten including the default. The selector reads the acceptance
+date (UTC) and reporting device from SharePoint and loads only the selected
+saved report. A previous page with only a default ID still works as before.
+
+Acceptance 1 should show 2,293 files, 98 detected types and 13 coverage errors.
+Acceptance 2 is synthetic and should show 3 files, 1 detected type and 0
+coverage errors. Switch 1 to 2 to 1, then switch rapidly and confirm that
+the final selection keeps its own counts. Verify 2 responds with the sole
+Credit Card Number row showing 1 file and 3 matches.

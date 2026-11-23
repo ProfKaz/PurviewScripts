@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseReport } from '../src/report.ts';
+import { parseAcceptanceIds, parseReport } from '../src/report.ts';
 
 const report = {
   SchemaVersion: 1, AcceptanceKey: 'key', ManifestSha256: 'hash', BatchId: 'batch',
@@ -20,4 +20,14 @@ test('rejects a report bound to a different acceptance', () => {
 test('rejects inconsistent aggregate totals', () => {
   const inconsistent = { ...report, ByOutcome: [{ Outcome: 'Responded', Files: 1 }] };
   assert.throws(() => parseReport({ ...item, PortalReportJson: JSON.stringify(inconsistent) }), /Totals/);
+});
+
+test('keeps the default acceptance first and deduplicates history', () => {
+  assert.deepEqual(parseAcceptanceIds('1', '2, 1, 2'), [1, 2]);
+  assert.deepEqual(parseAcceptanceIds('1', ''), [1]);
+});
+test('rejects malformed and oversized history', () => {
+  assert.throws(() => parseAcceptanceIds('1', '2,1e2'));
+  assert.throws(() => parseAcceptanceIds('1', '2,'));
+  assert.throws(() => parseAcceptanceIds('1', '2,3,4,5,6,7,8,9,10,11'));
 });
