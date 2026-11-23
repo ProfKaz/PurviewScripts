@@ -9,7 +9,7 @@ aceptaciones del sitio actual. El certificado del publicador no interviene.
 Con Node.js 24 y npm, desde esta carpeta:
 
 ```powershell
-npm install
+npm ci
 node --test test/report.test.mjs
 npm run build
 ```
