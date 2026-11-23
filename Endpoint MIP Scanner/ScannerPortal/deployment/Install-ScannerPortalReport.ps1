@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.2.2
+.VERSION 0.3.0
 .GUID 7bb7b04d-f2b8-4d7d-8840-ec9a8972352b
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.3.0 Install the report history selector, upgrading either previous pilot package.
 0.2.2 Reuse the verified current package when the catalog omits ProductId.
 0.2.1 Recover a verified prior catalog file when app metadata does not match.
 0.2.0 Install or upgrade to the English report web part.
@@ -20,11 +21,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$version = [version]'0.2.0.0'
-$priorVersion = [version]'0.1.0.0'
+$version = [version]'0.3.0.0'
+$priorVersions = @([version]'0.1.0.0', [version]'0.2.0.0')
 $productId = [guid]'5670f3cc-719f-44e2-a809-b9ddd68f674a'
-$expectedHash = 'CE9BBA15A5613AA884B017B31F5FCC9405F69AE7C8B94FE32BEFF17256CFAB49'
-$url = 'https://raw.githubusercontent.com/ProfKaz/PurviewScripts/2cc8b361456a09680b2dd30d4d6f0a04a5adf4f1/Endpoint%20MIP%20Scanner/ScannerPortal/ui/packages/scanner-report-0.2.0.sppkg'
+$expectedHash = 'D15B1AB2293416D8C171DADB69AB6F291CDFE5E71042D184A7812445C441FA32'
+$url = 'https://raw.githubusercontent.com/ProfKaz/PurviewScripts/9f7ff4a5ba0a641661b630ea76b9b549c7ef48c4/Endpoint%20MIP%20Scanner/ScannerPortal/ui/packages/scanner-report-0.3.0.sppkg'
 if (-not $DownloadOnly) {
     if ($TenantId -eq [guid]::Empty -or $PortalClientId -eq [guid]::Empty -or
         $SiteUrl.Scheme -ne 'https' -or $SiteUrl.Host -notmatch '^[a-z0-9-]+\.sharepoint\.com$' -or
@@ -62,10 +63,10 @@ if (-not $DownloadOnly) {
         if ($web.Url.TrimEnd('/') -ne $SiteUrl.AbsoluteUri.TrimEnd('/')) { throw 'Connected site differs from the requested site.' }
         $apps = @(Get-PnPApp -Scope Site -Connection $connection -ErrorAction Stop)
         $app = $apps | Where-Object { ([string]$_.ProductId -eq [string]$productId) -or ([string]$_.Id -eq [string]$productId) } | Select-Object -First 1
-        if ($app -and [version]$app.AppCatalogVersion -notin @($priorVersion, $version)) {
+        if ($app -and [version]$app.AppCatalogVersion -notin ($priorVersions + $version)) {
             throw 'The existing site catalog version is outside the supported upgrade path.'
         }
-        if ($app -and $app.InstalledVersion -and [version]$app.InstalledVersion -notin @($priorVersion, $version)) {
+        if ($app -and $app.InstalledVersion -and [version]$app.InstalledVersion -notin ($priorVersions + $version)) {
             throw 'The installed version is outside the supported upgrade path.'
         }
 
@@ -91,7 +92,7 @@ if (-not $DownloadOnly) {
                         throw 'The verified package is already in the catalog, but its app record could not be identified uniquely.'
                     }
                     $app = $matches[0]
-                } elseif ($existingHash -ceq 'C9645145783F9DDFDC25ECCC5D2560A14B6535572EDC11D5CF2B7743EA699796') {
+                } elseif ($existingHash -cin @('C9645145783F9DDFDC25ECCC5D2560A14B6535572EDC11D5CF2B7743EA699796', 'CE9BBA15A5613AA884B017B31F5FCC9405F69AE7C8B94FE32BEFF17256CFAB49')) {
                     $overwritePrior = $true
                 } else {
                     throw "Catalog file already exists without matching app metadata. Its hash is $existingHash. No overwrite was attempted."
@@ -102,7 +103,7 @@ if (-not $DownloadOnly) {
         if (-not $app) {
             $uploaded = Add-PnPApp -Path $package -Scope Site -Overwrite:$overwritePrior -Publish -Connection $connection
             $app = Get-PnPApp -Identity $uploaded.Id -Scope Site -Connection $connection
-        } elseif ([version]$app.AppCatalogVersion -eq $priorVersion) {
+        } elseif ([version]$app.AppCatalogVersion -in $priorVersions) {
             $uploaded = Add-PnPApp -Path $package -Scope Site -Overwrite -Publish -Connection $connection
             $app = Get-PnPApp -Identity $uploaded.Id -Scope Site -Connection $connection
         }
@@ -116,7 +117,7 @@ if (-not $DownloadOnly) {
         if (-not $app.InstalledVersion) {
             Install-PnPApp -Identity $app.Id -Scope Site -Wait -Connection $connection | Out-Null
             $result.Outcome = 'Installed'
-        } elseif ([version]$app.InstalledVersion -eq $priorVersion) {
+        } elseif ([version]$app.InstalledVersion -in $priorVersions) {
             Update-PnPApp -Identity $app.Id -Scope Site -Connection $connection | Out-Null
             $result.Outcome = 'Updated'
         } elseif ([version]$app.InstalledVersion -eq $version) {
