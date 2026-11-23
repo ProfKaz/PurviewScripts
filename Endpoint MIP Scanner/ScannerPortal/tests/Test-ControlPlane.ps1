@@ -1,4 +1,4 @@
-﻿<#PSScriptInfo
+<#PSScriptInfo
 .VERSION 1.0.0
 .GUID b5cacb4d-11bb-40e3-b8a1-b8f2d8e1ced
 .AUTHOR Kaz Demos / ProfKaz
@@ -28,7 +28,17 @@ function Get-MgContext {[pscustomobject]@{TenantId=$tenant.ToString()}}
 function Connect-PnPOnline {param($Url,$Tenant,$ClientId,[switch]$Interactive,[switch]$ReturnConnection) 'fixture-connection'}
 function Disconnect-PnPOnline {param($ErrorAction)}
 function Get-PnPList {param($Identity,$Includes,$Connection) [pscustomobject]@{Id=if($Identity -eq 'ScannerPortalConfig'){'config-list'}else{'landing-list'};BaseTemplate=101}}
-function Get-PnPProperty {param($ClientObject,$Property,$Connection) if($Property -eq 'HasUniqueRoleAssignments'){return $true};return @()}
+$publisher = [guid]::NewGuid()
+$landingAssignment = [pscustomobject]@{
+    Member = [pscustomobject]@{LoginName="i:0i.t|ms.sp.ext|$publisher@$tenant";PrincipalType='AppConsentPrincipal';Title='Existing publisher'}
+    RoleDefinitionBindings = @([pscustomobject]@{RoleTypeKind=3})
+}
+function Get-PnPProperty {
+    param($ClientObject,$Property,$Connection)
+    if($Property -eq 'HasUniqueRoleAssignments'){return $true}
+    if($Property -eq 'RoleAssignments' -and $ClientObject.Id -eq 'landing-list'){return $landingAssignment}
+    return $ClientObject.$Property
+}
 function Get-PnPSiteCollectionAdmin {param($Connection) [pscustomobject]@{LoginName='admin@example.invalid'}}
 function Get-MgApplication {param($Filter,$Property,$ApplicationId) if($global:ControlPlaneFixture.App){return $global:ControlPlaneFixture.App}}
 function New-MgApplication {param($DisplayName,$SignInAudience)
@@ -87,8 +97,16 @@ $rsa=[Security.Cryptography.RSA]::Create(2048)
 $request=[Security.Cryptography.X509Certificates.CertificateRequest]::new('CN=Endpoint-Test',$rsa,[Security.Cryptography.HashAlgorithmName]::SHA256,[Security.Cryptography.RSASignaturePadding]::Pkcs1)
 $cert=$request.CreateSelfSigned([DateTimeOffset]::UtcNow.AddMinutes(-5),[DateTimeOffset]::UtcNow.AddDays(30))
 try{
- $null=& $setup @common -Action Initialize -PortalClientId $portal -AllowSharedIngress
- $null=& $setup @common -Action Initialize -PortalClientId $portal -AllowSharedIngress
+ $denied=$false
+ try { $null=& $setup @common -Action Initialize -PortalClientId $portal -AllowSharedIngress }
+ catch {
+    if ($_.Exception.Message -notlike 'Unexpected library principal:*') { throw }
+    $denied=$true
+ }
+ Assert ($denied -and $global:ControlPlaneFixture.Creates -eq 0) 'Unexpected Landing principal did not stop initialization.'
+
+ $null=& $setup @common -Action Initialize -PortalClientId $portal -AllowSharedIngress -ExistingLandingPublisherClientId $publisher
+ $null=& $setup @common -Action Initialize -PortalClientId $portal -AllowSharedIngress -ExistingLandingPublisherClientId $publisher
  Assert ($global:ControlPlaneFixture.Creates -eq 1 -and $global:ControlPlaneFixture.Assignments.Count -eq 1) 'Initialize duplicated app or role grant.'
  Assert ($global:ControlPlaneFixture.Grants['config-list'].roles[0] -eq 'read' -and $global:ControlPlaneFixture.Grants['landing-list'].roles[0] -eq 'write') 'Wrong resource roles.'
  $registration=[guid]::NewGuid()

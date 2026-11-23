@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.4.0
+.VERSION 1.4.1
 
 .GUID 0576cc7a-692e-4876-bfe5-d1fb62a30116
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+2026-11-23  1.4.1  Preserve the existing pilot Landing publisher during control plane setup.
 2026-11-23  1.4.0  Program Files installation and user-context endpoint configuration.
 2026-11-20  1.3.0  Portal control plane and managed endpoint enrollment stages.
 2026-11-20  1.2.1  CurrentUser publisher credentials without local elevation.
@@ -25,7 +26,7 @@ Endpoint MIP Scanner component: Install-EndpointMIPScanner.ps1.
 .NOTES
 HISTORY
 Script      : Install-EndpointMIPScanner.ps1
-Version     : 1.4.0
+Version     : 1.4.1
 Tracking ID : 0576cc7a-692e-4876-bfe5-d1fb62a30116
 2026-11-18  Kaz Demos  First tracked suite release; preserves prior milestone implementation.
 #>
@@ -247,7 +248,7 @@ try {
         $_.type -eq 'blob' -and $_.mode -in '100644','100755' -and $_.path.StartsWith($prefix)
     })
     if ($files.Count -eq 0) { throw 'Suite not found in this reference.' }
-    Write-Host "Endpoint MIP Scanner 1.4.0 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
+    Write-Host "Endpoint MIP Scanner 1.4.1 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
     Write-Host "Verifying $($files.Count) suite files in $root"
     $stamp = [guid]::NewGuid().ToString('N')
     $staging = Join-Path $work $stamp
@@ -300,7 +301,7 @@ try {
     }
     Write-SetupJson (Join-Path $work 'files.json') @{ Repository = $repository; Commit = $sha; Files = $manifest.ToArray() }
     $state = [ordered]@{
-        InstallId = $stamp; SuiteVersion = '1.4.0'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
+        InstallId = $stamp; SuiteVersion = '1.4.1'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
         Completed = @(); Status = 'Running'; RestartRequired = $false; VisualCppPackageSha256 = $null
     }
     $state.Completed += 'VerifiedDownload'
@@ -374,6 +375,9 @@ try {
             $parameters = @{ TenantId=$TenantId; SiteUrl=$SiteUrl; StateDirectory=$ControlPlaneStateDirectory; Action=$ControlPlaneAction; Mode='Apply' }
             if ($PortalClientId -ne [guid]::Empty) { $parameters.PortalClientId=$PortalClientId }
             if ($ControlPlaneClientId -ne [guid]::Empty) { $parameters.ClientId=$ControlPlaneClientId }
+            if ($PublisherClientId -ne [guid]::Empty -and $ControlPlaneAction -eq 'Initialize') {
+                $parameters.ExistingLandingPublisherClientId=$PublisherClientId
+            }
             if ($EnrollmentRequest) { $parameters.RequestPath=$EnrollmentRequest }
             if ($ProfilePath) { $parameters.ProfilePath=$ProfilePath }
             if ($RegistrationId -ne [guid]::Empty) { $parameters.RegistrationId=$RegistrationId }

@@ -147,3 +147,11 @@ Criterios remotos antes de ampliar: app puede leer Config y escribir Landing; no
 Referencias: [grants de lista](https://learn.microsoft.com/en-us/graph/api/list-post-permissions?view=graph-rest-1.0), [permisos seleccionados](https://learn.microsoft.com/en-us/graph/permissions-selected-overview), [certificados públicos en aplicaciones](https://learn.microsoft.com/en-us/graph/applications-how-to-add-certificate).
 
 Validación ejecutada el 20 de noviembre de 2026: Test-ManagedEndpoint en Windows PowerShell 5.1 sin elevación (certificado local y scanner reales; Graph simulado); restauración de caché desde un proceso PS5.1 nuevo; Test-ControlPlane en PS7.6 con Graph/PnP simulados y validador PS5.1 real; Test-Incremental, Test-SuiteLayout y análisis sintáctico. No se ejecutó registro de tarea, aprobación real en Entra ni operaciones de SharePoint del tenant.
+
+### Obtener el bootstrap cuando Landing ya tiene el publicador W03B
+
+En el equipo administrativo, usar la etapa `ControlPlane -ControlPlaneAction Initialize` con el
+`PortalClientId` de Setup y el `PublisherClientId` del publicador Work existente. Este último se
+reconoce únicamente por su identidad explícita y su rol Contribute en Landing. Se conserva su
+concesión. El instalador genera `endpoint-bootstrap.json` dentro de `ControlPlaneStateDirectory`
+y devuelve la ruta como `bootstrapPath`. Conservar el resto del estado en el equipo administrativo.

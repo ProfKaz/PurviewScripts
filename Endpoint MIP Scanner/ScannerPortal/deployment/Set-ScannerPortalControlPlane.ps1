@@ -1,16 +1,17 @@
-﻿<#PSScriptInfo
-.VERSION 1.0.0
+<#PSScriptInfo
+.VERSION 1.0.1
 .GUID a06d345c-ac61-4738-9f16-d75633017a48
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-23 1.0.1 Recognize the explicitly identified existing Landing publisher.
 2026-11-20 1.0.0 Shared certificate application, selected library grants, approval and profile publication.
 #>
 <#
 .DESCRIPTION
 Administrative portal operations. No private endpoint keys or administrative credentials are distributed.
 .NOTES
-Version     : 1.0.0
+Version     : 1.0.1
 Tracking ID : a06d345c-ac61-4738-9f16-d75633017a48
 #>
 #Requires -Version 7.4
@@ -21,6 +22,7 @@ param([ValidateSet('Initialize','Approve','Publish')][string]$Action='Initialize
     [guid]$PortalClientId=[guid]::Empty,[guid]$ClientId=[guid]::Empty,
     [Parameter(Mandatory)][string]$StateDirectory,
     [string]$RequestPath,[string]$ProfilePath,[guid]$RegistrationId=[guid]::Empty,
+    [guid]$ExistingLandingPublisherClientId=[guid]::Empty,
     [switch]$AllowSharedIngress)
 $ErrorActionPreference='Stop'
 $suite=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -61,14 +63,22 @@ function Ensure-ControlFolder([string]$Drive,[string]$Parent,[string]$Name) {
     }
     if (-not $folder.ContainsKey('folder')) {throw 'Expected configuration folder.'};$folder.id
 }
-function Assert-ControlAcl($List,$Connection) {
+function Assert-ControlAcl($List,$Connection,[string]$LibraryName) {
     if (-not (Get-PnPProperty -ClientObject $List -Property HasUniqueRoleAssignments -Connection $Connection)) {throw 'Library inherits access. Review permissions first.'}
     $admins=@(Get-PnPSiteCollectionAdmin -Connection $Connection|ForEach-Object {$_.LoginName.ToLowerInvariant()})
     foreach($assignment in (Get-PnPProperty -ClientObject $List -Property RoleAssignments -Connection $Connection)) {
-        $bindings=@(Get-PnPProperty -ClientObject $assignment -Property RoleDefinitionBindings -Connection $Connection)
-        if (@($bindings|Where-Object {[int](Get-PnPProperty -ClientObject $_ -Property RoleTypeKind -Connection $Connection) -ne 1}).Count -eq 0) {continue}
+        $null=Get-PnPProperty -ClientObject $assignment -Property RoleDefinitionBindings -Connection $Connection
+        $roles=@(foreach($roleBinding in $assignment.RoleDefinitionBindings) {
+            $null=Get-PnPProperty -ClientObject $roleBinding -Property RoleTypeKind -Connection $Connection
+            if ([int]$roleBinding.RoleTypeKind -ne 1) { [int]$roleBinding.RoleTypeKind }
+        })
+        if ($roles.Count -eq 0) {continue}
         $member=Get-PnPProperty -ClientObject $assignment -Property Member -Connection $Connection
         if ($script:AllowedControlApp -and $member.LoginName -match ('(^|\|)'+[regex]::Escape($script:AllowedControlApp)+'@')) {continue}
+        $publisherLogin="i:0i.t|ms.sp.ext|$ExistingLandingPublisherClientId@$TenantId"
+        if ($LibraryName -eq 'ScannerPortalLanding' -and $ExistingLandingPublisherClientId -ne [guid]::Empty -and
+            $member.LoginName -eq $publisherLogin -and $roles.Count -eq 1 -and $roles[0] -eq 3) {continue}
+
         $members=if ([string]$member.PrincipalType -eq 'SharePointGroup') {@(Get-PnPGroupMember -Group $member.Id -Connection $Connection)} else {@($member)}
         foreach($m in $members) {if ($m.LoginName.ToLowerInvariant() -notin $admins) {throw "Unexpected library principal: $($m.Title)"}}
     }
@@ -98,7 +108,7 @@ try {
         foreach($name in 'ScannerPortalConfig','ScannerPortalLanding') {
             $list=Get-PnPList -Identity $name -Includes RootFolder,HasUniqueRoleAssignments -Connection $connection
             if ([int]$list.BaseTemplate -ne 101) {throw 'Expected Foundation document library.'}
-            Assert-ControlAcl $list $connection
+            Assert-ControlAcl $list $connection $name
             $libraries[$name]=$list.Id.ToString()
         }
         $graphSp=@(Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'")[0]
