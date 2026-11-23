@@ -378,6 +378,11 @@
       "Path": "ScannerPortal/Work/SharePointUpload/New-WorkHistoryPilotBatch.ps1",
       "Version": "0.1.0",
       "TrackingId": "3772dfe7-279e-497e-a6ba-91288b2822ef"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkScheduledSdkSso.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "c614da41-0173-40bc-b364-47460fcc3483"
     }
   ],
   "Dependencies": [
