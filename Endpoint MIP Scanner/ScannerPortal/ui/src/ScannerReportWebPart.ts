@@ -3,14 +3,16 @@ import { createRoot, Root } from 'react-dom/client';
 import { SPHttpClient } from '@microsoft/sp-http';
 import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
 import { IPropertyPaneConfiguration, PropertyPaneTextField } from '@microsoft/sp-property-pane';
-import { Dropdown, IDropdownOption } from '@fluentui/react';
+import { Dropdown, IDropdownOption, Pivot, PivotItem } from '@fluentui/react';
 import { parseAcceptanceIds, parseReport, Report } from './report';
 import { ReportView } from './ReportView';
+import { ConfigurationView } from './ConfigurationView';
 
 interface ReportProperties {
   acceptanceListId: string;
   acceptanceItemId: string;
   historyItemIds?: string;
+  publishedProfilePath?: string;
 }
 
 const date = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -56,9 +58,28 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
           onChange: (_, option) => { if (option) this.select(listId, Number(option.key)); }
         })
       : null;
-    this.root?.render(React.createElement(React.Fragment, null, selector,
-      React.createElement(ReportView, { report: this.report, error: this.error, key: this.request })));
+    const report = React.createElement(React.Fragment, null, selector,
+      React.createElement(ReportView, { report: this.report, error: this.error, key: this.request }));
+    const path = this.properties.publishedProfilePath?.trim();
+    this.root?.render(path
+      ? React.createElement(Pivot, { 'aria-label': 'Scanner Portal' },
+          React.createElement(PivotItem, { headerText: 'Reports' }, report),
+          React.createElement(PivotItem, { headerText: 'Configuration' },
+            React.createElement(ConfigurationView, { key: path, path, load: this.loadProfile })))
+      : report);
   }
+
+  private readonly loadProfile = async (path: string): Promise<ArrayBuffer> => {
+    const web = this.context.pageContext.web;
+    const serverPath = web.serverRelativeUrl.replace(/\/$/, '') + '/ScannerPortalConfig/' + path;
+    const url = web.absoluteUrl + "/_api/web/GetFileByServerRelativePath(decodedurl=@path)/$value?@path=" +
+      encodeURIComponent("'" + serverPath.replace(/'/g, "''") + "'");
+    const response = await this.context.spHttpClient.get(url, SPHttpClient.configurations.v1);
+    if (!response.ok) throw new Error([401, 403, 404].indexOf(response.status) !== -1
+      ? 'This profile is unavailable or your account does not have access.'
+      : 'Could not load the published profile. Try again.');
+    return response.arrayBuffer();
+  };
 
   private select(listId: string, itemId: number): void {
     this.selection = itemId;
@@ -129,6 +150,13 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
         PropertyPaneTextField('acceptanceListId', { label: 'ScannerPortalAcceptance list GUID' }),
         PropertyPaneTextField('acceptanceItemId', { label: 'Acceptance item ID' }),
         PropertyPaneTextField('historyItemIds', { label: 'Additional acceptance item IDs', description: 'Comma-separated IDs. Configure up to ten items including the default.' })
+      ]
+    }, {
+      groupName: 'Configuration preview', groupFields: [
+        PropertyPaneTextField('publishedProfilePath', {
+          label: 'Published profile path',
+          description: 'Path relative to ScannerPortalConfig. Leave blank to hide Configuration.'
+        })
       ]
     }] }] };
   }
