@@ -363,6 +363,11 @@
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkAcceptanceLedger.ps1",
       "Version": "0.1.0",
       "TrackingId": "a35628b3-e27b-4d07-b5ca-a018b5dd8245"
+    },
+    {
+      "Path": "ScannerPortal/Work/SharePointUpload/Publish-WorkAdministrativeReport.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "fceba35d-f548-410f-8dd1-41db6209d086"
     }
   ],
   "Dependencies": [

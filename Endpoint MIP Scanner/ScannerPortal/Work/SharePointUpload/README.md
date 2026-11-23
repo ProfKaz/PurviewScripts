@@ -281,3 +281,14 @@ existing protected acceptance item and verifies it by reading it back.
 Readers can request PortalReportJson directly by acceptance item ID.
 An identical report is reused. A differing existing report stops the pilot.
 Run one administrative publisher at a time. No endpoint changes are needed.
+
+### W07A administrative SharePoint page
+
+Publish-WorkAdministrativeReport.ps1 reads one acceptance report and checks
+the pinned W06E SHA-256 and acceptance binding. It creates a new empty
+Site Pages draft, removes inherited grants and checks the resulting role
+assignments against site administrators before adding aggregates or publishing.
+The page is a snapshot and uses the native text part. A pre-existing page
+with the same name is not overwritten. If a run stops after creating a draft,
+inspect that draft and its permissions before retrying. Validate the rendered
+page with the administrator and direct URL denial with an ordinary user.
