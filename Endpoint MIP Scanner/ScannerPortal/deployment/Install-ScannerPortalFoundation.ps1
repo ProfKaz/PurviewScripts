@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.1.0
+.VERSION 1.1.1
 
 .GUID 11feeccf-cc31-439b-baae-1fa367a6717c
 
@@ -21,7 +21,7 @@ Endpoint MIP Scanner component: ScannerPortal/deployment/Install-ScannerPortalFo
 .NOTES
 HISTORY
 Script      : ScannerPortal/deployment/Install-ScannerPortalFoundation.ps1
-Version     : 1.1.0
+Version     : 1.1.1
 Tracking ID : 11feeccf-cc31-439b-baae-1fa367a6717c
 2026-11-18  Kaz Demos  First tracked suite release; preserves prior milestone implementation.
 #>
@@ -52,7 +52,7 @@ if ($SiteUrl.Scheme -ne 'https' -or $SiteUrl.Host -notmatch '^[a-z0-9-]+\.sharep
 $manifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'solution-manifest.json') -Raw | ConvertFrom-Json
 if ($manifest.solution -ne 'ScannerPortal' -or $manifest.schemaVersion -ne '0.1') { throw 'Unsupported manifest.' }
 $pageName = 'ScannerPortalPilot.aspx'
-$pageTitle = 'Scanner Portal — Piloto'
+$pageTitle = 'Scanner Portal — Pilot'
 $siteAddress = $SiteUrl.AbsoluteUri.TrimEnd('/')
 $plan = [pscustomobject]@{
     Stage = 'Foundation'
@@ -164,11 +164,11 @@ $query = "<View><Query><Where><Eq><FieldRef Name='FileLeafRef'/><Value Type='Fil
 $existingPage = Get-PnPListItem -List $pageLibrary.Id -Query $query -Connection $SiteConnection | Select-Object -First 1
 if ($null -eq $existingPage) {
     Add-PnPPage -Name $pageName -Title $pageTitle -LayoutType Home -Connection $SiteConnection | Out-Null
-} elseif ($existingPage['Title'] -ne $pageTitle) {
+} elseif ($existingPage['Title'] -notin @($pageTitle, 'Scanner Portal — Piloto')) {
     throw 'An unrelated page already uses the pilot page filename.'
 }
 if ($null -eq $existingPage -or [string]$existingPage['CanvasContent1'] -notmatch 'Powered by Kaz Demos') {
-    $intro = '<h2>Scanner Portal</h2><p>Entorno piloto de configuración y reportes de escaneo.</p><ul><li>Perfiles y configuración central</li><li>Explorador de contenido</li><li>Explorador de actividades</li></ul><p>Los conectores y reportes aún no están habilitados.</p><p><strong>Powered by Kaz Demos</strong></p>'
+    $intro = '<h2>Scanner Portal</h2><p>Pilot environment for scanner configuration and reporting.</p><ul><li>Profiles and centralized settings</li><li>Content explorer</li><li>Activity explorer</li></ul><p>Configure connectors and reports for this site.</p><p><strong>Powered by Kaz Demos</strong></p>'
     Add-PnPPageTextPart -Page $pageName -Text $intro -Connection $SiteConnection | Out-Null
 }
 Set-PnPPage -Identity $pageName -Publish -Connection $SiteConnection | Out-Null

@@ -9,9 +9,9 @@
   "supportedHosts": ["SharePointWebPart"],
   "preconfiguredEntries": [{
     "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
-    "group": { "default": "Administración" },
-    "title": { "default": "Endpoint MIP Scanner · Reporte" },
-    "description": { "default": "Resumen de un lote aceptado" },
+    "group": { "default": "Administration" },
+    "title": { "default": "Endpoint MIP Scanner · Report" },
+    "description": { "default": "Report for an accepted batch" },
     "officeFabricIconFontName": "ReportDocument",
     "properties": { "acceptanceListId": "", "acceptanceItemId": "1" }
   }]

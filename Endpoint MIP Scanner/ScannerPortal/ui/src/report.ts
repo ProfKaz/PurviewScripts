@@ -21,11 +21,11 @@ export function parseReport(item: { Title: string; BatchId: string; ManifestSha2
       !Array.isArray(report.ByExtension) || !report.ByExtension.every(row => row && text(row.Extension) && count(row.Files)) ||
       !Array.isArray(report.ByOutcome) || !report.ByOutcome.every(row => row && text(row.Outcome) && count(row.Files)) ||
       !Array.isArray(report.BySit) || !report.BySit.every(row => row && text(row.SitId) && count(row.Files) && count(row.Matches) && (row.Name == null || typeof row.Name === 'string'))) {
-    throw new Error('El resumen guardado no coincide con su aceptación o su formato no es válido.');
+    throw new Error('The stored report does not match its acceptance record or has an invalid format.');
   }
   const sum = (rows: { Files: number }[]): number => rows.reduce((total, row) => total + row.Files, 0);
   if (sum(report.ByExtension) !== sum(report.ByOutcome)) {
-    throw new Error('Los totales por extensión y resultado no coinciden.');
+    throw new Error('Totals by extension and outcome do not match.');
   }
   return report;
 }
