@@ -32,3 +32,17 @@ Una prueba con una cuenta ordinaria debe comprobar la página y el acceso
 directo al registro de SharePoint.
 
 Referencias: Microsoft Learn SPFx 1.24.1 y GoogleChrome Modern Web Guidance.
+
+## Install the packaged pilot
+
+Run deployment/Install-ScannerPortalReport.ps1 using PowerShell 7.4+ and
+PnP.PowerShell 3.2.0 (the pilot runtime already supplies PowerShell).
+The script fetches a pinned package from GitHub and verifies SHA-256 before
+using the existing Setup app for the one-time interactive administrator
+sign-in. DownloadOnly downloads and verifies without requiring PnP.
+The site collection App Catalog must already be enabled. The script uploads
+and installs at Site scope, verifies the version, and reuses an existing
+installation of that version. An upgrade needs a separate deployment.
+Portal viewers do not run this installer or install Node, npm, or PowerShell.
+Placement and configuration of the web part on the protected page follow
+installation.
