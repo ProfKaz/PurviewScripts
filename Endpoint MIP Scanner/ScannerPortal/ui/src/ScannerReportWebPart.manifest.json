@@ -1,0 +1,18 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-web-part-manifest.schema.json",
+  "id": "7c053f24-70d7-46db-a085-b2b5271f4a31",
+  "alias": "ScannerReportWebPart",
+  "componentType": "WebPart",
+  "version": "*",
+  "manifestVersion": 2,
+  "requiresCustomScript": false,
+  "supportedHosts": ["SharePointWebPart"],
+  "preconfiguredEntries": [{
+    "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
+    "group": { "default": "Administración" },
+    "title": { "default": "Endpoint MIP Scanner · Reporte" },
+    "description": { "default": "Resumen de un lote aceptado" },
+    "officeFabricIconFontName": "ReportDocument",
+    "properties": { "acceptanceListId": "", "acceptanceItemId": "1" }
+  }]
+}

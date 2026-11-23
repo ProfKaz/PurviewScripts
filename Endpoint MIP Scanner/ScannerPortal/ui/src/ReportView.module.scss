@@ -1,0 +1,13 @@
+.report { display: grid; grid-template-columns: minmax(9rem, 15%) minmax(0, 1fr); gap: 1.25rem; color: "[theme:bodyText, default:#242424]"; }
+.nav { display: flex; flex-direction: column; gap: .25rem; }
+.nav button { text-align: start; border: 0; border-inline-start: 3px solid transparent; background: transparent; color: inherit; padding: .7rem; cursor: pointer; }
+.nav button[aria-pressed=true] { border-inline-start-color: "[theme:themePrimary, default:#0f6cbd]"; background: "[theme:neutralLighter, default:#f5f5f5]"; font-weight: 600; }
+.body h2 { margin-block: 0 1rem; }
+.metrics, .panels, .filters { display: flex; flex-wrap: wrap; gap: 1rem; margin-block: 0 1rem; }
+.metrics div { flex: 1 1 8rem; border: 1px solid "[theme:neutralLight, default:#ddd]"; padding: .7rem; }
+.metrics strong { display: block; font-size: 1.5rem; }
+.panels table { flex: 1 1 12rem; }
+.body table { border-collapse: collapse; width: 100%; }
+.body caption { text-align: start; font-weight: 600; margin-block: .5rem; }
+.body td, .body th { text-align: start; padding: .45rem; border-bottom: 1px solid "[theme:neutralLight, default:#ddd]"; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .report { grid-template-columns: minmax(0, 1fr); } .nav { flex-direction: row; flex-wrap: wrap; } }
