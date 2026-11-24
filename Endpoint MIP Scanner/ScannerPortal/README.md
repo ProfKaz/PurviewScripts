@@ -60,3 +60,17 @@ profiles/workstations-audit-pilot/1.0.0/7762E17DBF7CCE72358C025A1BC40AC7A66C0174
 - As an administrator, check **Configuration** for **SHA-256 verified**, **Paused**, and **Content audit: Disabled**, plus the expected root, extensions and exclusions. Confirm both existing batches still load in **Reports**.
 - As an ordinary account, check that the restricted page and direct profile URL are denied. SharePoint authorizes both reads using the signed-in session. Keep the existing site and library ACLs.
 - The preview displays the pinned published revision. Assignment status is not evaluated. Editing profiles, publishing revisions and assigning endpoints are separate steps.
+
+## Managed inventory reports
+
+Package 0.5.0.0 displays the managed runner projection alongside the existing discovery reports.
+Use `Test-WorkPortalReception.ps1 -ManagedInventory -StoreReport` with an explicit managed
+registration/run path, the manifest SHA-256 from the endpoint and the protected acceptance
+list. Confirm app-only denial on the acceptance list before passing
+`-AcknowledgePublisherDenied`. The receiver rejects hash or count mismatches and reuses the
+same acceptance item on replay. Add the returned item ID to the web part history.
+
+Managed inventory totals apply to one run. A generation can span multiple runs. Content
+audit counts and the local rule table describe TXT/CSV local rules. The Purview SIT table
+belongs to the separate discovery report. Interrupted logs lacking a terminal summary are
+retained in Landing and are outside this projection.
