@@ -351,7 +351,7 @@
     },
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkPortalReception.ps1",
-      "Version": "0.5.0",
+      "Version": "0.6.0",
       "TrackingId": "9db4ac4a-f2e7-4fd6-9413-1557d38fb74f"
     },
     {
@@ -376,12 +376,12 @@
     },
     {
       "Path": "ScannerPortal/deployment/Install-ScannerPortalReport.ps1",
-      "Version": "0.7.0",
+      "Version": "0.8.0",
       "TrackingId": "7bb7b04d-f2b8-4d7d-8840-ec9a8972352b"
     },
     {
       "Path": "ScannerPortal/deployment/Publish-ScannerPortalOverview.ps1",
-      "Version": "0.1.0",
+      "Version": "0.2.0",
       "TrackingId": "fbd56309-9178-4238-b5df-1fbba2b853c4"
     },
     {
