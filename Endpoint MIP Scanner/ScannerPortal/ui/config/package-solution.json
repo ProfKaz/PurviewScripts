@@ -2,7 +2,7 @@
   "solution": {
     "name": "Endpoint MIP Scanner - Reports",
     "id": "5670f3cc-719f-44e2-a809-b9ddd68f674a",
-    "version": "0.6.0.0",
+    "version": "0.7.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": false,
     "isDomainIsolated": false,
@@ -10,7 +10,7 @@
       "title": "Endpoint MIP Scanner - Reports",
       "description": "Enables the report web part on the site.",
       "id": "e1eedb03-a7b4-4c51-b165-52ddbc2c80fe",
-      "version": "0.6.0.0"
+      "version": "0.7.0.0"
     }]
   },
   "paths": { "zippedPackage": "solution/scanner-report.sppkg" }

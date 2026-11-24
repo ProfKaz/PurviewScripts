@@ -9,6 +9,7 @@ import { ReportView } from './ReportView';
 import { ConfigurationView } from './ConfigurationView';
 import { ConsolidatedView, Cycle } from './ConsolidatedView';
 import styles from './ReportView.module.scss';
+import { Overview, Snapshot } from './Overview';
 
 interface ReportProperties {
   acceptanceListId: string;
@@ -65,13 +66,25 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
     const path = this.properties.publishedProfilePath?.trim();
     this.root?.render(React.createElement(React.Fragment, null,
         React.createElement(Pivot, { 'aria-label': 'Scanner Portal' },
-          React.createElement(PivotItem, { headerText: 'Reports' }, report),
+          React.createElement(PivotItem, { headerText: 'Overview' }, React.createElement(Overview, { load: this.loadOverview })),
+          React.createElement(PivotItem, { headerText: 'Batch detail' }, report),
           React.createElement(PivotItem, { headerText: 'Consolidated inventory' },
             React.createElement(ConsolidatedView, { key: listId, load: this.loadCycles })),
           path && React.createElement(PivotItem, { headerText: 'Configuration' },
             React.createElement(ConfigurationView, { key: path, path, load: this.loadProfile }))),
         React.createElement('footer', { className: styles.brand }, 'Powered by KazDemos')));
   }
+
+  private readonly loadOverview = async (): Promise<Snapshot> => {
+    const web = this.context.pageContext.web;
+    const path = web.serverRelativeUrl.replace(/\/$/, '') + '/ScannerPortalExecutive/overview.json';
+    const url = web.absoluteUrl + "/_api/web/GetFileByServerRelativePath(decodedurl=@path)/$value?@path=" + encodeURIComponent("'" + path.replace(/'/g, "''") + "'");
+    const response = await this.context.spHttpClient.get(url, SPHttpClient.configurations.v1);
+    if (!response.ok) throw new Error('The governance snapshot is unavailable. Check publication and read access.');
+    const snapshot = await response.json() as Snapshot;
+    if (snapshot.schema !== 1 || !Array.isArray(snapshot.groups)) throw new Error('Unsupported governance snapshot.');
+    return snapshot;
+  };
 
   private readonly loadCycles = async (): Promise<Cycle[]> => {
     const id = (this.properties.acceptanceListId || '').trim();

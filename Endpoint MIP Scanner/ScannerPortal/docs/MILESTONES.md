@@ -15,6 +15,17 @@ Cada milestone se cierra por evidencia de aceptación, no por porcentaje de arch
 | SP7 — Retención y compactación | Posterior, pendiente | SP6 | Políticas de retención, compresión y compactación recuperable, snapshots/deltas, conteos y trazabilidad preservados. Contabilizar versiones y papelera. |
 | SP8 — Capacidad de grandes organizaciones | Posterior, pendiente | SP7 | Escenarios de 1.000 / 10.000 / 100.000 usuarios, cuotas, concurrencia, latencia y decisión de almacenamiento histórico basada en medición. |
 
+## Consola de gobierno de datos
+
+| Entrega | Estado y criterio |
+| --- | --- |
+| Overview | Implementado en SPFx 0.7 para publicación administrativa. Lee una proyección con fecha de actualización, agrupada por identidad de reporte y cuenta. Cuenta observaciones de archivos, observaciones con hallazgos y errores de cobertura. Distingue reglas locales de SIT y admite exclusión explícita de lotes sintéticos. La validación en SPO corresponde al despliegue. |
+| Cobertura de la flota | Pendiente. Centralizar altas y bajas por registro, asociar dispositivos cuando la identidad sea verificable, registrar versiones de binario y perfil por separado. Un heartbeat independiente de los hallazgos debe registrar hora de recepción y estado. Comparar registros activos con el corte UTC y mostrar activos en 24 h, atrasados, nunca vistos y pendientes de primer contacto. |
+| Inventario vigente y filtros cruzados | Pendiente. Proyectar observaciones por dispositivo, cuenta, identidad de archivo, generación y versión. Reconciliar deltas, cambios y bajas. Precalcular extensión × detector para que un filtro cruzado cuente solo coincidencias reales. Mostrar cobertura parcial y reutilización. |
+| Configuración y operación | Pendiente. Editor de borrador con diferencia, validación, publicación versionada, asignación y restauración; registrar actor y fecha. Retirar registro con confirmación, revocar la credencial específica y detener la asignación; conservar evidencia histórica. Verificar qué ocurre con el caché offline y con accesos de una identidad compartida. |
+| Acceso por función | Pendiente. Lectores acceden al resumen; operadores al diagnóstico y conciliación; administradores a perfiles, altas, bajas y permisos. Aplicar ACL en página, bibliotecas y listas, probar acceso directo por URL/API y restringir acceso a rutas crudas. |
+| Escala | Pendiente. Actualizar proyecciones de forma incremental por aceptación y publicar particiones consistentes por período/dispositivo. Medir tiempos de ingesta, tamaño de respuesta y latencia con 1.000, 10.000 y 100.000 registros antes de definir capacidades adicionales. |
+
 ## Integración LocalMIPScanner 5.1
 
 SP2 debe definir biblioteca de ingesta con permisos efectivos, identidad central y autenticación de agentes. SP3 incorpora outbox local, receptor, validación de emisor, carga idempotente y recibo verificado. Los hitos SP7 y SP8 son posteriores al piloto integral. Ver [contrato de integración y aceptación](LOCAL-REPORT-INGESTION.md).

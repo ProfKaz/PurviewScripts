@@ -6,6 +6,20 @@ It reads the acceptance list in the current site through the signed-in
 SharePoint session. The package includes its client assets and requests no
 additional API permissions.
 
+### Executive overview (0.7.0.0)
+
+Run `deployment/Publish-ScannerPortalOverview.ps1` as the portal administrator with
+`-SiteUrl`, `-TenantId` and `-PortalClientId`. Supply known test batch IDs through
+`-ExcludeBatchId` on each refresh. The publisher pages through the acceptance ledger
+and publishes a snapshot in the separate ScannerPortalExecutive library. Initial
+provisioning breaks permission inheritance before uploading the snapshot. Grant
+designated readers access to the summary and the report page separately.
+
+Refresh the snapshot after ingestion. Its timestamp is the publication time.
+The device and account selectors apply to the entire overview. The extension and
+detection search fields narrow their respective distributions. Historical totals
+include repeat observations. The device count represents reporting identities.
+
 Version 0.6.0.0 adds **Consolidated inventory** to the existing web part.
 Select the accepted cycles for one device. The selector reads the 50 most
 recent acceptance items and includes those with a saved managed inventory
