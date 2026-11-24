@@ -5,6 +5,16 @@
   "Bootstrap": "Install-EndpointMIPScanner.ps1",
   "Scripts": [
     {
+      "Path": "ScannerPortal/Work/SharePointUpload/Start-ScannerPortalReceiver.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "cb5b26cc-fe13-42c3-bd04-300bcb57dc9e"
+    },
+    {
+      "Path": "ScannerPortal/tests/Test-ReceiverDiscovery.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "89818a36-b63a-42b7-9d02-fd38f819ae56"
+    },
+    {
       "Path": "LocalMIPScanner.WinPS51/Install-LocalMIPScanner.ps1",
       "Version": "1.1.0",
       "TrackingId": "91bdf292-1ff1-47f4-b0d0-020ab1607ef5"
@@ -351,7 +361,7 @@
     },
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkPortalReception.ps1",
-      "Version": "0.6.0",
+      "Version": "0.7.0",
       "TrackingId": "9db4ac4a-f2e7-4fd6-9413-1557d38fb74f"
     },
     {
@@ -376,7 +386,7 @@
     },
     {
       "Path": "ScannerPortal/deployment/Install-ScannerPortalReport.ps1",
-      "Version": "0.8.0",
+      "Version": "0.9.0",
       "TrackingId": "7bb7b04d-f2b8-4d7d-8840-ec9a8972352b"
     },
     {
