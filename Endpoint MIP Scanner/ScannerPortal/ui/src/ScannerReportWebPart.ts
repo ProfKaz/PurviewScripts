@@ -72,7 +72,9 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
             React.createElement(ConsolidatedView, { key: listId, load: this.loadCycles })),
           path && React.createElement(PivotItem, { headerText: 'Configuration' },
             React.createElement(ConfigurationView, { key: path, path, load: this.loadProfile }))),
-        React.createElement('footer', { className: styles.brand }, 'Powered by KazDemos')));
+        React.createElement('footer', { className: styles.brand },
+          'Powered by KazDemos',
+          React.createElement('span', null, 'Web part v' + this.manifest.version))));
   }
 
   private readonly loadOverview = async (): Promise<Snapshot> => {

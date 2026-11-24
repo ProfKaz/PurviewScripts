@@ -1,4 +1,4 @@
-﻿# Milestones y backlog
+# Milestones y backlog
 
 Cada milestone se cierra por evidencia de aceptación, no por porcentaje de archivos escritos. Las estimaciones se definirán al medir volumen y acceso al tenant. Esta tabla es la fuente versionada del seguimiento; los milestones nativos de GitHub, cuando se creen, deben usar los mismos títulos.
 
@@ -7,8 +7,8 @@ Cada milestone se cierra por evidencia de aceptación, no por porcentaje de arch
 | SP0 — Diagnóstico y arquitectura | Completado | — | Inventario local/remoto, riesgos de exportación, arquitectura, decisiones y contratos documentados. Revisión estática; sin afirmar validación del tenant. |
 | SP1 — Contratos y alcance de eventos | En curso | SP0 | Esquemas versionados, muestras sintéticas, consultas User obligatorias y pruebas negativas. Validar campos reales de usuario/dispositivo/event ID y cuentas de cada scanner en laboratorio. |
 | SP2 — Aprovisionamiento y configuración central | En curso (preparación del piloto) | SP1 | Instalador PowerShell idempotente desde release GitHub, bibliotecas/listas, índices, ACL, perfiles versionados y sincronizador local. Segunda instalación sin duplicados; usuario no autorizado recibe 403; equipo recupera última versión válida. |
-| SP3 — Ingesta restringida y recuperable | Pendiente | SP1, SP2 | Adaptar AE y logs locales, checkpoint después de publicación, outbox y deduplicación. Cuentas ajenas jamás llegan a CSV/JSON/ADX/SharePoint. Fallo de carga y reinicio sin pérdida ni doble conteo. |
-| SP4 — Portal SPFx y reportes | Pendiente | SP2, SP3 | Paquete sppkg, Inicio, Perfiles, Scanners, contenido y actividades. Consultas indexadas/paginadas, permisos efectivos y filtros reales. Medir latencia y escala; validar contraste, teclado y procedencia. |
+| SP3 — Ingesta restringida y recuperable | En curso (ingesta asistida validada) | SP1, SP2 | Adaptar AE y logs locales, checkpoint después de publicación, outbox y deduplicación. Cuentas ajenas jamás llegan a CSV/JSON/ADX/SharePoint. Fallo de carga y reinicio sin pérdida ni doble conteo. |
+| SP4 — Portal SPFx y reportes | En curso (Overview visible en SPO) | SP2, SP3 | Paquete sppkg, Inicio, Perfiles, Scanners, contenido y actividades. Consultas indexadas/paginadas, permisos efectivos y filtros reales. Medir latencia y escala; validar contraste, teclado y procedencia. |
 | SP5 — Instalación desde GitHub y piloto integral | Pendiente | SP4 | Release verificable, instalación limpia, actualización/rollback, smoke test extremo a extremo y runbook. Evidencia con scanner oficial y Local MIP Scanner. |
 | SP6 — Operación y endurecimiento | Pendiente | SP5 | Rotación de certificados, retención, alertas de retraso/errores, métricas y recuperación. Ejercicio de revocación, corrupción de lote y pérdida de conectividad. |
 
@@ -17,9 +17,11 @@ Cada milestone se cierra por evidencia de aceptación, no por porcentaje de arch
 
 ## Consola de gobierno de datos
 
+Secuencia del piloto: validar en SPO la actualización automática del resumen, automatizar la recepción de lotes, incorporar el registro de equipos y su última comunicación, y construir el inventario vigente. La gestión de perfiles y bajas desde el portal requiere permisos por función y auditoría. El pie del web part mostrará la versión del manifiesto SPFx a partir del próximo paquete.
+
 | Entrega | Estado y criterio |
 | --- | --- |
-| Overview | Implementado en SPFx 0.7 para publicación administrativa. Lee una proyección con fecha de actualización, agrupada por identidad de reporte y cuenta. Cuenta observaciones de archivos, observaciones con hallazgos y errores de cobertura. Distingue reglas locales de SIT y admite exclusión explícita de lotes sintéticos. La validación en SPO corresponde al despliegue. |
+| Overview | Versión 0.7.0.0 instalada y visible en el sitio piloto según la validación administrativa. Lee un resumen con fecha de actualización, agrupado por identidad de reporte y cuenta. Cuenta observaciones de archivos, observaciones con hallazgos y errores de cobertura. Distingue reglas locales de SIT y admite exclusión explícita de lotes sintéticos. |
 | Cobertura de la flota | Pendiente. Centralizar altas y bajas por registro, asociar dispositivos cuando la identidad sea verificable, registrar versiones de binario y perfil por separado. Un heartbeat independiente de los hallazgos debe registrar hora de recepción y estado. Comparar registros activos con el corte UTC y mostrar activos en 24 h, atrasados, nunca vistos y pendientes de primer contacto. |
 | Actualización del resumen | Versión 0.8 implementada, pendiente de prueba en SPO. Al almacenar o reintentar un reporte el receptor reconcilia el resumen con las exclusiones guardadas. Una pestaña visible consulta el resumen cada minuto. La recepción desatendida de nuevos lotes y la agregación incremental siguen pendientes. |
 | Inventario vigente y filtros cruzados | Pendiente. Proyectar observaciones por dispositivo, cuenta, identidad de archivo, generación y versión. Reconciliar deltas, cambios y bajas. Precalcular extensión × detector para que un filtro cruzado cuente solo coincidencias reales. Mostrar cobertura parcial y reutilización. |
