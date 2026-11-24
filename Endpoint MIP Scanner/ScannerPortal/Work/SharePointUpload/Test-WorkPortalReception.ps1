@@ -1,9 +1,10 @@
 <#PSScriptInfo
-.VERSION 0.4.0
+.VERSION 0.5.0
 .GUID 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-23 0.5.0 Validate and project managed inventory runs separately from Purview SIT reports.
 2026-11-21 0.3.0 W06C read-only reporting from accepted sealed evidence.
 2026-11-21 0.2.0 Optional W06B2 central acceptance publication after fresh remote validation and ACL review.
 2026-11-21 0.1.0 W06 independent portal-side read/validation preview; local receipt only.
@@ -12,7 +13,7 @@
 .DESCRIPTION
 Downloads and validates a sealed batch with existing Setup identity and PS5.1 contract. Optional central acceptance add/readback; no endpoint outbox access.
 .NOTES
-Version     : 0.4.0
+Version     : 0.5.0
 Tracking ID : 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 #>
 #Requires -Version 7.4
@@ -20,19 +21,35 @@ Tracking ID : 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 param([Parameter(Mandatory)][guid]$TenantId,[Parameter(Mandatory)][uri]$SiteUrl,
  [Parameter(Mandatory)][guid]$PortalClientId,[Parameter(Mandatory)][guid]$ListId,
  [Parameter(Mandatory)][string]$TargetRelativePath,[Parameter(Mandatory)][string]$ExpectedManifestSha256,
- [Parameter(Mandatory)][string]$VerificationModulePath,[switch]$PublishAcceptance,[switch]$ReportAcceptedBatch,[switch]$StoreReport,[guid]$AcceptanceListId=[guid]::Empty,[switch]$AcknowledgePublisherDenied,
+ [string]$VerificationModulePath,[switch]$ManagedInventory,[switch]$PublishAcceptance,[switch]$ReportAcceptedBatch,[switch]$StoreReport,[guid]$AcceptanceListId=[guid]::Empty,[switch]$AcknowledgePublisherDenied,
  [string]$StateDirectory=(Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner/Work/PortalReceiver'))
 $ErrorActionPreference='Stop'
-if($StoreReport -and -not $ReportAcceptedBatch){throw 'StoreReport requires ReportAcceptedBatch.'}
+if ($ManagedInventory -and ($PublishAcceptance -or $ReportAcceptedBatch -or -not $StoreReport -or
+    -not $AcknowledgePublisherDenied -or $AcceptanceListId -in @([guid]::Empty,$ListId))) {
+    throw 'ManagedInventory requires StoreReport, a distinct acceptance list and a publisher-denial acknowledgment.'
+}
+
+if($StoreReport -and -not ($ReportAcceptedBatch -or $ManagedInventory)){throw 'StoreReport requires ReportAcceptedBatch.'}
 if($ReportAcceptedBatch -and ($PublishAcceptance -or $AcceptanceListId -eq [guid]::Empty -or $AcceptanceListId -eq $ListId)){throw 'Reporting requires a separate acceptance list and cannot publish.'}
 if($PublishAcceptance -and ($AcceptanceListId -eq [guid]::Empty -or $AcceptanceListId -eq $ListId -or -not $AcknowledgePublisherDenied)){throw 'Separate acceptance list and prior publisher-denial acknowledgment required.'}
 if($TenantId -eq [guid]::Empty -or $PortalClientId -eq [guid]::Empty -or $ListId -eq [guid]::Empty){throw 'Nonempty tenant, Setup and library IDs required.'}
-if($TargetRelativePath -cnotmatch '^work-pilot/devices/([a-f0-9]{32})/batches/([a-f0-9]{64})$'){throw 'Invalid exact device/batch path.'}
-$deviceId=([guid]$Matches[1]).ToString();$batchId=$Matches[2].ToUpperInvariant()
+if ($ManagedInventory) {
+    if ($TargetRelativePath -cnotmatch '^devices/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})/batches/([a-f0-9]{32})$') {throw 'Invalid managed registration/run path.'}
+    $deviceId=([guid]$Matches[1]).ToString()
+    $batchId=$Matches[2]
+} else {
+    if($TargetRelativePath -cnotmatch '^work-pilot/devices/([a-f0-9]{32})/batches/([a-f0-9]{64})$'){throw 'Invalid exact device/batch path.'}
+    $deviceId=([guid]$Matches[1]).ToString()
+    $batchId=$Matches[2].ToUpperInvariant()
+}
+
 if($ExpectedManifestSha256 -cnotmatch '^[A-F0-9]{64}$'){throw 'Pinned original manifest hash required.'}
 if($SiteUrl.Scheme -ne 'https' -or $SiteUrl.Host -notmatch '^[a-z0-9-]+\.sharepoint\.com$' -or $SiteUrl.AbsolutePath -notmatch '^/sites/[A-Za-z0-9_-]+/?$' -or $SiteUrl.Query -or $SiteUrl.Fragment -or $SiteUrl.UserInfo -or -not $SiteUrl.IsDefaultPort){throw 'Invalid commercial SharePoint site URL.'}
-$VerificationModulePath=(Get-Item -LiteralPath $VerificationModulePath).FullName
-if([IO.Path]::GetFileName($VerificationModulePath) -cne 'LocalMIPReporting.psm1'){throw 'Expected original reporting verification module.'}
+if (-not $ManagedInventory) {
+    if (-not $VerificationModulePath) { throw 'VerificationModulePath is required for sealed batches.' }
+    $VerificationModulePath=(Get-Item -LiteralPath $VerificationModulePath).FullName
+    if([IO.Path]::GetFileName($VerificationModulePath) -cne 'LocalMIPReporting.psm1'){throw 'Expected original reporting verification module.'}
+}
 $StateDirectory=[IO.Path]::GetFullPath($StateDirectory)
 for($ancestor=[IO.DirectoryInfo]::new($StateDirectory);$ancestor;$ancestor=$ancestor.Parent){if($ancestor.Exists -and ($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Reparse receiver state directory.'}}
 [void][IO.Directory]::CreateDirectory($StateDirectory)
@@ -65,14 +82,17 @@ function Get-WorkAcceptance {
  $key=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($TenantId.ToString()+'|'+$SiteUrl.AbsoluteUri.TrimEnd('/').ToLowerInvariant()+'|'+$ListId.ToString()+'|'+$TargetRelativePath)))
  $query="<View><Query><Where><Eq><FieldRef Name='Title'/><Value Type='Text'>$key</Value></Eq></Where></Query><RowLimit>2</RowLimit></View>"
  $values=@{Title=$key;BatchId=$batchId;ManifestSha256=$actual;ReportingDeviceId=$deviceId;SourceListId=$ListId.ToString();SourceRelativePath=$TargetRelativePath}
- $summary=$verified.Summary|Select-Object candidateFiles,respondedFiles,noResponseFiles,errorFiles,skippedFiles,filesWithFindings,coverageErrors,appliedRetryCount
+ $summary=if ($ManagedInventory) { $managed.Counts } else {
+    $verified.Summary|Select-Object candidateFiles,respondedFiles,noResponseFiles,errorFiles,skippedFiles,filesWithFindings,coverageErrors,appliedRetryCount
+ }
+ $validationScope=if ($ManagedInventory) {'Managed run identity, payload hashes/sizes and reconciled counts'}else{'Sealed identity, payload hashes/sizes and eight summary counts'}
  $acceptance=[ordered]@{contract='ScannerPortalAcceptance/1';state='AcceptedValidatedBatch';tenantId=$TenantId.ToString();sourceSiteUrl=$SiteUrl.AbsoluteUri.TrimEnd('/');sourceListId=$ListId.ToString()
   sourceRelativePath=$TargetRelativePath;acceptanceKey=$key;batchId=$batchId;manifestSha256=$actual;reportingDeviceId=$deviceId;summary=$summary
-  acceptedUtc=[DateTimeOffset]::UtcNow.ToString('o');validationScope='Sealed identity, payload hashes/sizes and eight summary counts';reportingIngestionConfirmed=$false}
+  acceptedUtc=[DateTimeOffset]::UtcNow.ToString('o');validationScope=$validationScope;reportingIngestionConfirmed=$false}
  $values.AcceptanceJson=$acceptance|ConvertTo-Json -Compress -Depth 8
  $existing=@(Get-PnPListItem -List $AcceptanceListId -Query $query -Connection $connection)
  $created=$false;$uncertain=$false
- if(-not $existing.Count -and $PublishAcceptance){
+ if(-not $existing.Count -and ($PublishAcceptance -or $ManagedInventory)){
   try{$null=Add-PnPListItem -List $AcceptanceListId -Values $values -Connection $connection;$created=$true}
   catch{$uncertain=$true}
   # Also resolves a unique-key race or a lost successful create response; never updates existing items.
@@ -87,7 +107,8 @@ function Get-WorkAcceptance {
  foreach($name in 'contract','state','tenantId','sourceSiteUrl','sourceListId','sourceRelativePath','acceptanceKey','batchId','manifestSha256','reportingDeviceId','validationScope'){
   if([string]$saved.$name -cne [string]$acceptance[$name]){throw 'Conflicting acceptance body; no overwrite.'}
  }
- foreach($name in 'candidateFiles','respondedFiles','noResponseFiles','errorFiles','skippedFiles','filesWithFindings','coverageErrors','appliedRetryCount'){
+ foreach($property in ([pscustomobject]$summary).PSObject.Properties){
+  $name=$property.Name
   if($null -eq $saved.summary.$name -or $saved.summary.$name -ne $summary.$name){throw 'Conflicting acceptance counts; no overwrite.'}
  }
  $accepted=[DateTimeOffset]::MinValue
@@ -108,7 +129,9 @@ try{
  $null=Get-PnPProperty -ClientObject $root -Property ServerRelativeUrl -Connection $connection
  $folderUrl=$root.ServerRelativeUrl.TrimEnd('/')+'/'+$TargetRelativePath
  [void][IO.Directory]::CreateDirectory($temp)
- foreach($name in 'manifest.json','records.jsonl','coverage.jsonl','summary.json'){
+ $names=@('manifest.json','records.jsonl','summary.json')
+ if (-not $ManagedInventory) { $names+= 'coverage.jsonl' }
+ foreach($name in $names){
   $url=$folderUrl+'/'+$name
   $metadata=Get-PnPFile -Url $url -AsListItem -Connection $connection
   if(-not $metadata -or $null -eq $metadata['File_x0020_Size'] -or [long]$metadata['File_x0020_Size'] -gt 64MB){throw 'Receiver pilot file limit exceeded.'}
@@ -118,6 +141,10 @@ try{
  $actual=(Get-FileHash -LiteralPath (Join-Path $temp 'manifest.json')).Hash
  if($actual -cne $ExpectedManifestSha256){throw 'Remote manifest differs from original pinned hash.'}
  $manifest=Get-Content -LiteralPath (Join-Path $temp 'manifest.json') -Raw|ConvertFrom-Json -AsHashtable
+ if ($ManagedInventory) {
+  . (Join-Path $PSScriptRoot 'Read-ManagedInventoryProjection.ps1')
+  $managed=Read-ManagedInventoryProjection $temp $manifest $TenantId $deviceId $batchId
+ } else {
  if($manifest.batchId -cne $batchId -or $manifest.identity.context.tenantId -ne $TenantId.ToString()){throw 'Remote batch/tenant mismatch.'}
  # Run the original verifier in its supported Windows PowerShell 5.1 runtime.
  $moduleLiteral=$VerificationModulePath.Replace("'","''");$batchLiteral=$temp.Replace("'","''")
@@ -127,9 +154,11 @@ try{
  if($LASTEXITCODE -ne 0){throw 'Original sealed batch verifier rejected downloaded evidence.'}
  $verified=($text -join "`n")|ConvertFrom-Json
  if(-not $verified.Verified -or $verified.BatchId -cne $batchId -or $verified.ManifestSha256 -cne $ExpectedManifestSha256){throw 'Unexpected verifier result.'}
- if($ReportAcceptedBatch){
+ }
+ if($ReportAcceptedBatch -or $ManagedInventory){
   $central=Get-WorkAcceptance
   $extensions=@{};$outcomes=@{};$types=@{}
+  if (-not $ManagedInventory) {
   foreach($line in [IO.File]::ReadLines((Join-Path $temp 'records.jsonl'))){
    if([string]::IsNullOrWhiteSpace($line)){continue}
    $record=ConvertFrom-Json -InputObject $line -AsHashtable
@@ -147,6 +176,7 @@ try{
     $types[$id].Matches += [long]$finding.count
    }
   }
+  }
   $report=[ordered]@{
    Test='W06C-AcceptedBatchReport';Outcome='Reported';BatchId=$batchId;ManifestSha256=$actual
    ReportingDeviceId=$deviceId;AccountObjectId=$manifest.identity.context.accountObjectId
@@ -156,13 +186,22 @@ try{
    BySit=@($types.Keys | Sort-Object | ForEach-Object {$types[$_]})
    CoverageErrors=$verified.Summary.coverageErrors;SharePointChanged=$false;PortalIngestionConfirmed=$false
   }
+  if ($ManagedInventory) {
+   $report.FilesVerified=2
+   $report.ByExtension=$managed.ByExtension
+   $report.ByOutcome=$managed.ByOutcome
+   $report.CoverageErrors=$managed.Counts.InventoryErrors
+   $report.ManagedInventory=$managed.Inventory
+  }
   if($StoreReport){
-   $summaryJson=ConvertTo-Json -InputObject ([ordered]@{
+   $projection=[ordered]@{
     SchemaVersion=1;BatchId=$batchId;ManifestSha256=$actual;AcceptanceKey=$central.AcceptanceKey
     ReportingDeviceId=$deviceId;AccountObjectId=$report.AccountObjectId
     ByExtension=$report.ByExtension;ByOutcome=$report.ByOutcome;BySit=$report.BySit
     CoverageErrors=$report.CoverageErrors
-   }) -Depth 8 -Compress
+   }
+   if ($ManagedInventory) { $projection.ManagedInventory=$managed.Inventory }
+   $summaryJson=ConvertTo-Json -InputObject $projection -Depth 8 -Compress
    if($summaryJson.Length -gt 60000){throw 'Summary exceeds the pilot column size limit.'}
    $column='PortalReportJson'
    $field=@(Get-PnPField -List $AcceptanceListId -Connection $connection | Where-Object InternalName -eq $column)
@@ -181,15 +220,15 @@ try{
     $stored=[string]$item[$column]
    }
    if($stored -cne $summaryJson -or $item['Title'] -cne $central.AcceptanceKey -or $item['ManifestSha256'] -cne $actual){throw 'Stored report differs from validated summary or acceptance binding.'}
-   $report.Test='W06D-StoreAcceptedBatchReport'
+   $report.Test=if($ManagedInventory){'ManagedInventory-PortalIngestion'}else{'W06D-StoreAcceptedBatchReport'}
    $report.Outcome=if($changed){'Stored'}else{'Reused'}
-   $report.SharePointChanged=$changed
+   $report.SharePointChanged=($changed -or $central.AcceptanceCreatedThisRun -or $central.CreateResponseUncertain)
    $report.PortalIngestionConfirmed=$true
    $report.ReportSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($stored)))
    $report.SitTypes=$report.BySit.Count
    $report.Remove('BySit')
   }
-  Write-Host ($(if($StoreReport){'=== WORK W06D PARA COMPARTIR ==='}else{'=== WORK W06C PARA COMPARTIR ==='})) -ForegroundColor Magenta
+  Write-Host ($(if($ManagedInventory){'=== MANAGED INVENTORY FOR SHARING ==='}elseif($StoreReport){'=== WORK W06D PARA COMPARTIR ==='}else{'=== WORK W06C PARA COMPARTIR ==='})) -ForegroundColor Magenta
   Write-Host ($report|ConvertTo-Json -Depth 8) -ForegroundColor Magenta
   return [pscustomobject]$report
  }

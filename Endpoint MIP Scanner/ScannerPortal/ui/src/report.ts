@@ -4,6 +4,11 @@ export interface Report {
   ManifestSha256: string;
   BatchId: string;
   CoverageErrors: number;
+  ManagedInventory?: {
+    AuditEnabled: boolean; AnalyzedFiles: number; ReusedFiles: number; FilesWithMatches: number;
+    AuditSkippedFiles: number; AuditErrors: number; GenerationComplete: boolean;
+    ByLocalRule: { RuleId: string; Files: number; Matches: number }[];
+  };
   ByExtension: { Extension: string; Files: number }[];
   ByOutcome: { Outcome: string; Files: number }[];
   BySit: { SitId: string; Name: string; Files: number; Matches: number }[];
@@ -26,6 +31,20 @@ export function parseReport(item: { Title: string; BatchId: string; ManifestSha2
   const sum = (rows: { Files: number }[]): number => rows.reduce((total, row) => total + row.Files, 0);
   if (sum(report.ByExtension) !== sum(report.ByOutcome)) {
     throw new Error('Totals by extension and outcome do not match.');
+  }
+  const inventory = report.ManagedInventory;
+  if (inventory !== undefined && (!inventory || typeof inventory.AuditEnabled !== 'boolean' ||
+      typeof inventory.GenerationComplete !== 'boolean' ||
+      ![inventory.AnalyzedFiles, inventory.ReusedFiles, inventory.FilesWithMatches,
+        inventory.AuditSkippedFiles, inventory.AuditErrors].every(count) ||
+      inventory.FilesWithMatches > inventory.AnalyzedFiles ||
+      inventory.AnalyzedFiles + inventory.ReusedFiles + inventory.AuditSkippedFiles + inventory.AuditErrors > sum(report.ByExtension) ||
+      !Array.isArray(inventory.ByLocalRule) ||
+      !inventory.ByLocalRule.every(row => row && text(row.RuleId) && count(row.Files) && count(row.Matches)) ||
+      (!inventory.AuditEnabled && (inventory.AnalyzedFiles + inventory.ReusedFiles + inventory.FilesWithMatches +
+        inventory.AuditSkippedFiles + inventory.AuditErrors + inventory.ByLocalRule.length > 0)) ||
+      report.BySit.length !== 0)) {
+    throw new Error('Invalid managed inventory report.');
   }
   return report;
 }

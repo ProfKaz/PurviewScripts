@@ -345,8 +345,13 @@
       "TrackingId": "5d60e962-a7e4-47be-839b-c61b96789a75"
     },
     {
+      "Path": "ScannerPortal/Work/SharePointUpload/Read-ManagedInventoryProjection.ps1",
+      "Version": "1.0.0",
+      "TrackingId": "90597121-8cef-4f5a-8319-8dcbc209e048"
+    },
+    {
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkPortalReception.ps1",
-      "Version": "0.4.0",
+      "Version": "0.5.0",
       "TrackingId": "9db4ac4a-f2e7-4fd6-9413-1557d38fb74f"
     },
     {

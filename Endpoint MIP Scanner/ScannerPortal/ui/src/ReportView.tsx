@@ -16,10 +16,37 @@ export function ReportView({ report, error }: { report?: Report; error?: string 
   if (error) return <MessageBar messageBarType={MessageBarType.error}>{error}</MessageBar>;
   if (!report) return <Spinner label="Loading report…" />;
 
+  const inventory = report.ManagedInventory;
   const total = report.ByExtension.reduce((sum, row) => sum + row.Files, 0);
   const needle = query.trim().toLocaleLowerCase();
   const rows = report.BySit.filter(row => (row.Name || '').toLocaleLowerCase().includes(needle) || row.SitId.toLowerCase().includes(needle))
     .sort((a, b) => sort === 'Name' ? (a.Name || a.SitId).localeCompare(b.Name || b.SitId) : b[sort] - a[sort] || a.SitId.localeCompare(b.SitId));
+
+  if (inventory) return <section className={styles.report} aria-label="Managed inventory report">
+    <div className={styles.body}>
+      <h2>Managed inventory</h2>
+      <p>{inventory.GenerationComplete ? 'Inventory generation complete' : 'Partial inventory generation'}</p>
+      <div className={styles.metrics}>
+        <div><strong>{number.format(total)}</strong>Files inventoried in this run</div>
+        <div><strong>{number.format(inventory.AnalyzedFiles)}</strong>Files analyzed in this run</div>
+        <div><strong>{number.format(inventory.FilesWithMatches)}</strong>Files with local rule matches</div>
+        <div><strong>{number.format(report.CoverageErrors)}</strong>Inventory errors</div>
+      </div>
+      <p>{inventory.AuditEnabled
+        ? 'Local content rules (TXT and CSV). Reused: ' + number.format(inventory.ReusedFiles) +
+          '. Skipped: ' + number.format(inventory.AuditSkippedFiles) + '. Audit errors: ' + number.format(inventory.AuditErrors) + '.'
+        : 'Content audit disabled.'}</p>
+      <div className={styles.panels}>
+        <table><caption>Files by extension</caption><thead><tr><th scope="col">Extension</th><th scope="col">Files</th></tr></thead>
+          <tbody>{report.ByExtension.map(row => <tr key={row.Extension}><td>{row.Extension}</td><td>{number.format(row.Files)}</td></tr>)}</tbody>
+        </table>
+        {inventory.ByLocalRule.length > 0 && <table><caption>Local rule matches in this run</caption>
+          <thead><tr><th scope="col">Rule</th><th scope="col">Files</th><th scope="col">Matches</th></tr></thead>
+          <tbody>{inventory.ByLocalRule.map(row => <tr key={row.RuleId}><td>{row.RuleId}</td><td>{number.format(row.Files)}</td><td>{number.format(row.Matches)}</td></tr>)}</tbody>
+        </table>}
+      </div>
+    </div>
+  </section>;
 
   return <section className={styles.report} aria-label="Discovery report">
     <nav className={styles.nav} aria-label="Report sections">

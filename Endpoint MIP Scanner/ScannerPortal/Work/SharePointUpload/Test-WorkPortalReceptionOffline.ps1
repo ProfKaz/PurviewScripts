@@ -112,6 +112,38 @@ try{
  try{& $scriptPath @common|Out-Null}catch{$rejected=$true};Assert $rejected 'Unsafe central ACL accepted.'
  Assert ($global:ReceiverFixture.Creates -eq 1) 'Conflict/ACL test rewrote acceptance.'
  Assert (@(Get-ChildItem (Join-Path $fixture 'state') -Directory -Filter 'download-*').Count -eq 0) 'Downloaded evidence left behind.'
+ $global:ReceiverFixture.Item=$null
+ $global:ReceiverFixture.BadAcl=$false
+ $global:ReceiverFixture.LostResponse=$false
+ $common.Remove('ReportAcceptedBatch')
+ $common.ManagedInventory=$true
+ $common.StoreReport=$true
+ $runId=[guid]::NewGuid().ToString('N')
+ $registrationId=[guid]::NewGuid().ToString()
+ $common.TargetRelativePath="devices/$registrationId/batches/$runId"
+ $managedSummary=@{event='summary';runId=$runId;inventoried=1;errors=0;generationComplete=$true}
+ $events=@(@{event='file';extension='.txt';path='C:\synthetic.txt'},$managedSummary)
+ $events | ForEach-Object { $_ | ConvertTo-Json -Compress } | Set-Content (Join-Path $fixture 'records.jsonl') -Encoding utf8
+ @{schemaVersion=1;source='LocalMIPScanner.WinPS51';tenantId=$common.TenantId.ToString();registrationId=$registrationId;summary=$managedSummary} |
+    ConvertTo-Json | Set-Content (Join-Path $fixture 'summary.json') -Encoding utf8
+ $files=@(foreach($name in 'records.jsonl','summary.json') {
+    $file=Get-Item (Join-Path $fixture $name)
+    @{name=$name;length=$file.Length;sha256=(Get-FileHash -LiteralPath $file.FullName).Hash}
+ })
+ @{schemaVersion=1;contract='ScannerPortal.InventoryRun/1';tenantId=$common.TenantId.ToString();registrationId=$registrationId;batchId=$runId;files=$files} |
+    ConvertTo-Json | Set-Content (Join-Path $fixture 'manifest.json')
+ $common.ExpectedManifestSha256=(Get-FileHash (Join-Path $fixture 'manifest.json')).Hash
+ $managed=& $scriptPath @common
+ $repeatManaged=& $scriptPath @common
+ Assert ($managed.Outcome -eq 'Stored' -and $managed.ManagedInventory.AnalyzedFiles -eq 0 -and
+    -not $managed.ManagedInventory.AuditEnabled -and $managed.ByExtension[0].Files -eq 1 -and
+    $repeatManaged.Outcome -eq 'Reused' -and $global:ReceiverFixture.Creates -eq 2 -and
+    $global:ReceiverFixture.ReportWrites -eq 2) 'Managed inventory totals or idempotence failed.'
+ $global:ReceiverFixture.BadDownload=$true
+ $rejected=$false;try{& $scriptPath @common|Out-Null}catch{$rejected=$true}
+ Assert ($rejected -and $global:ReceiverFixture.ReportWrites -eq 2) 'Corrupted managed inventory accepted.'
+ 'PASS: managed inventory payloads, disabled audit, aggregate projection and idempotent publication'
+
  'PASS: mocked PnP download; actual PS5.1 identity/payload/summary verification; local dedup, corruption/hash rejection and cleanup; mocked acceptance create/readback, lost-response recovery, dedup, conflict and unsafe ACL rejection'
 }finally{
  $safe=[IO.Path]::GetFullPath($fixture)

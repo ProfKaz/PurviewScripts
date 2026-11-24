@@ -31,3 +31,14 @@ test('rejects malformed and oversized history', () => {
   assert.throws(() => parseAcceptanceIds('1', '2,'));
   assert.throws(() => parseAcceptanceIds('1', '2,3,4,5,6,7,8,9,10,11'));
 });
+test('distinguishes managed inventory and an audit that was disabled', () => {
+  const managed = {
+    ...report, BySit: [], ByOutcome: [{ Outcome: 'Inventoried', Files: 2293 }],
+    ManagedInventory: { AuditEnabled: false, AnalyzedFiles: 0, ReusedFiles: 0, FilesWithMatches: 0,
+      AuditSkippedFiles: 0, AuditErrors: 0, GenerationComplete: true, ByLocalRule: [] }
+  };
+  const parse = () => parseReport({ ...item, PortalReportJson: JSON.stringify(managed) });
+  assert.equal(parse().ManagedInventory.AuditEnabled, false);
+  managed.ManagedInventory.AnalyzedFiles = 1;
+  assert.throws(parse, /Invalid managed inventory/);
+});
