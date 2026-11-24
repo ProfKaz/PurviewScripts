@@ -79,8 +79,12 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
     const web = this.context.pageContext.web;
     const path = web.serverRelativeUrl.replace(/\/$/, '') + '/ScannerPortalExecutive/overview.json';
     const url = web.absoluteUrl + "/_api/web/GetFileByServerRelativePath(decodedurl=@path)/$value?@path=" + encodeURIComponent("'" + path.replace(/'/g, "''") + "'");
-    const response = await this.context.spHttpClient.get(url, SPHttpClient.configurations.v1);
-    if (!response.ok) throw new Error('The governance snapshot is unavailable. Check publication and read access.');
+    const response = await this.context.spHttpClient.get(url, SPHttpClient.configurations.v1, { headers: { 'Cache-Control': 'no-cache' } });
+    if (!response.ok) {
+      const error = new Error('The governance snapshot is unavailable. Check publication and read access.');
+      if ([401, 403, 404].indexOf(response.status) >= 0) error.name = 'AccessDenied';
+      throw error;
+    }
     const snapshot = await response.json() as Snapshot;
     if (snapshot.schema !== 1 || !Array.isArray(snapshot.groups)) throw new Error('Unsupported governance snapshot.');
     return snapshot;

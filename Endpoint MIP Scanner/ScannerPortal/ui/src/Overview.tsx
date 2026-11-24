@@ -26,10 +26,27 @@ export function Overview({load}: {load: () => Promise<Snapshot>}): React.ReactEl
   const [user,setUser] = React.useState('');
   React.useEffect(() => {
     let active = true;
-    load().then(result => { if (active) setData(result); }).catch((e: Error) => { if (active) setError(e.message); });
-    return () => { active = false; };
+    let loading = false;
+    const refresh = async (): Promise<void> => {
+      if (!active || loading || document.hidden) return;
+      loading = true;
+      try {
+        const result = await load();
+        if (active) { setData(result); setError(''); }
+      } catch (e) {
+        if (active) {
+          if ((e as Error).name === 'AccessDenied') setData(undefined);
+          setError((e as Error).message);
+        }
+      } finally { loading = false; }
+    };
+    const onVisible = (): void => { void refresh(); };
+    onVisible();
+    const timer = window.setInterval(onVisible, 60000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [load]);
-  if (error) return <MessageBar>{error}</MessageBar>;
+  if (error && !data) return <MessageBar>{error}</MessageBar>;
   if (!data) return <Spinner label="Loading governance overview…" />;
   const account = (g: Group): string => g.account || 'Unattributed';
   const devices = Array.from(new Set(data.groups.map(g => g.device))).sort();
@@ -45,6 +62,7 @@ export function Overview({load}: {load: () => Promise<Snapshot>}): React.ReactEl
   const metrics: [string,number][] = [['Reporting identities',new Set(rows.map(g=>g.device)).size],['File observations',totals('observations')],
     ['Observations with findings',totals('findings')],['Coverage errors',totals('coverageErrors')]];
   return <section className={styles.body}><h2>Data governance overview</h2>
+    {error && <MessageBar>Refresh failed. Showing the last available snapshot.</MessageBar>}
     <p>Accepted reports through {new Date(data.generatedUtc).toLocaleString('en-US', {timeZone:'UTC'})} UTC · {totals('runs')} included in this view</p>
     <div className={styles.filters}><label>Reporting device <select value={device} onChange={e=>{setDevice(e.target.value);setUser('');}}>
       <option value="">All devices</option>{devices.map(d=><option key={d}>{d}</option>)}</select></label>

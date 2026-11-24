@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.1.0
+.VERSION 0.2.0
 .GUID fbd56309-9178-4238-b5df-1fbba2b853c4
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.2.0 Refresh enabled snapshots after ingestion, preserving exclusions and detecting concurrent writes.
 0.1.0 Publish the executive reporting snapshot from accepted batch summaries.
 #>
 #Requires -Version 7.4
@@ -11,13 +12,40 @@ param(
     [Parameter(Mandatory)][uri]$SiteUrl,
     [Parameter(Mandatory)][guid]$TenantId,
     [Parameter(Mandatory)][guid]$PortalClientId,
-    [string[]]$ExcludeBatchId = @()
+    [string[]]$ExcludeBatchId = @(),
+    [object]$Connection,
+    [switch]$AfterIngestion
 )
 $ErrorActionPreference = 'Stop'
 Import-Module PnP.PowerShell -RequiredVersion 3.2.0
-$conn = Connect-PnPOnline -Url $SiteUrl.AbsoluteUri -Tenant $TenantId -ClientId $PortalClientId -Interactive -ReturnConnection
+$conn = if ($Connection) { $Connection } else { Connect-PnPOnline -Url $SiteUrl.AbsoluteUri -Tenant $TenantId -ClientId $PortalClientId -Interactive -ReturnConnection }
 try {
     $name = 'ScannerPortalExecutive'
+    $web = Get-PnPWeb -Includes Url -Connection $conn
+    if ($web.Url.TrimEnd('/') -ne $SiteUrl.AbsoluteUri.TrimEnd('/')) { throw 'Connected site differs from the target.' }
+    $library = Get-PnPList -Connection $conn | Where-Object Title -eq $name
+    if (!$library) {
+        if ($AfterIngestion) { return 'NotConfigured' }
+        $null = New-PnPList -Title $name -Url $name -Template DocumentLibrary -Connection $conn
+        $null = Set-PnPList -Identity $name -BreakRoleInheritance -CopyRoleAssignments:$false -Connection $conn
+    }
+    $library = Get-PnPList -Identity $name -Includes HasUniqueRoleAssignments,BaseTemplate,RootFolder -Connection $conn
+    if (!$library.HasUniqueRoleAssignments -or $library.BaseTemplate -ne 101) { throw 'Review the executive library permissions before publishing.' }
+    $null = Get-PnPProperty -ClientObject $library.RootFolder -Property Files -Connection $conn
+    $file = $library.RootFolder.Files | Where-Object Name -eq 'overview.json'
+    $prior = $null
+    if ($file) {
+        $null = Get-PnPProperty -ClientObject $file -Property ETag,ServerRelativeUrl -Connection $conn
+        $etag = $file.ETag
+        $prior = Get-PnPFile -Url $file.ServerRelativeUrl -AsString -Connection $conn | ConvertFrom-Json
+        if ($prior.schema -ne 1 -or !$etag) { throw 'Unexpected overview file.' }
+    }
+    if ($AfterIngestion -and $prior.refreshAfterIngestion -ne $true) { return 'NotConfigured' }
+    if (!$PSBoundParameters.ContainsKey('ExcludeBatchId')) {
+        if ($prior.excluded -gt 0 -and $null -eq $prior.excludeBatchIds) { throw 'Supply the original excluded batch IDs to migrate this snapshot.' }
+        $ExcludeBatchId = @($prior.excludeBatchIds | Where-Object { $_ })
+    }
+    $inputs = [Collections.Generic.List[string]]::new()
     $groups = @{}
     $seen = @{}
     $excluded = 0
@@ -25,6 +53,8 @@ try {
     $source = Get-PnPList -Identity 'ScannerPortalAcceptance' -Connection $conn
     Get-PnPListItem -List $source.Id -PageSize 200 -Fields Title,BatchId,ManifestSha256,ReportingDeviceId,PortalReportJson,AcceptanceJson -Connection $conn | ForEach-Object {
         $row = $_.FieldValues
+        $material = @($row.Title,$row.BatchId,$row.ReportingDeviceId,$row.ManifestSha256,$row.AcceptanceJson,$row.PortalReportJson) | ConvertTo-Json -Compress
+        $inputs.Add([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($material))))
         if ($row.BatchId -in $ExcludeBatchId) { $excluded++ }
         elseif (!$row.PortalReportJson) { $pending++ }
         else {
@@ -63,18 +93,32 @@ try {
             }
         }
     }
-    $snapshot = [ordered]@{schema=1; generatedUtc=[datetime]::UtcNow.ToString('o'); excluded=$excluded
-        pending=$pending; groups=@($groups.Values | Sort-Object { $_.device }, { $_.account })}
-    $library = Get-PnPList -Connection $conn | Where-Object Title -eq $name
-    if (!$library) {
-        $null = New-PnPList -Title $name -Url $name -Template DocumentLibrary -Connection $conn
-        $null = Set-PnPList -Identity $name -BreakRoleInheritance -CopyRoleAssignments:$false -Connection $conn
+    $inputs.Sort([StringComparer]::Ordinal)
+    $policy = @($ExcludeBatchId | Sort-Object -Unique)
+    $signature = ($inputs -join '') + '|' + ($policy -join ',')
+    $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($signature)))
+    if ($prior.refreshAfterIngestion -eq $true -and $prior.sourceSha256 -ceq $digest) {
+        return [pscustomobject]@{ Outcome='Current'; IncludedRuns=$seen.Count; GeneratedUtc=$prior.generatedUtc }
     }
-    $library = Get-PnPList -Identity $name -Includes HasUniqueRoleAssignments,BaseTemplate,RootFolder -Connection $conn
-    if (!$library.HasUniqueRoleAssignments -or $library.BaseTemplate -ne 101) { throw 'Review the executive library permissions before publishing.' }
+    $snapshot = [ordered]@{schema=1; refreshAfterIngestion=$true; excludeBatchIds=$policy; sourceSha256=$digest; generatedUtc=[datetime]::UtcNow.ToString('o'); excluded=$excluded
+        pending=$pending; groups=@($groups.Values | Sort-Object { $_.device }, { $_.account })}
     $bytes = [Text.Encoding]::UTF8.GetBytes(($snapshot | ConvertTo-Json -Depth 8 -Compress))
     $stream = [IO.MemoryStream]::new($bytes)
-    try { $null = Add-PnPFile -FileName 'overview.json' -Folder $library.RootFolder.ServerRelativeUrl -Stream $stream -Connection $conn }
+    try {
+        if ($file) {
+            $save = [Microsoft.SharePoint.Client.FileSaveBinaryInformation]::new()
+            $save.ETag = $etag
+            $save.ContentStream = $stream
+            $file.SaveBinary($save)
+        } else {
+            $create = [Microsoft.SharePoint.Client.FileCreationInformation]::new()
+            $create.Url = 'overview.json'
+            $create.Overwrite = $false
+            $create.ContentStream = $stream
+            $null = $library.RootFolder.Files.Add($create)
+        }
+        Invoke-PnPQuery -Connection $conn
+    }
     finally { $stream.Dispose() }
     [pscustomobject]@{ Outcome='Published'; IncludedRuns=$seen.Count; ExcludedRuns=$excluded; AwaitingReport=$pending; GeneratedUtc=$snapshot.generatedUtc }
-} finally { Disconnect-PnPOnline -ErrorAction SilentlyContinue }
+} finally { if (!$Connection) { Disconnect-PnPOnline -ErrorAction SilentlyContinue } }

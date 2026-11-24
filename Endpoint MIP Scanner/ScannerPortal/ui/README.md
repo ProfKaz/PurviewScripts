@@ -15,7 +15,16 @@ and publishes a snapshot in the separate ScannerPortalExecutive library. Initial
 provisioning breaks permission inheritance before uploading the snapshot. Grant
 designated readers access to the summary and the report page separately.
 
-Refresh the snapshot after ingestion. Its timestamp is the publication time.
+Version 0.8.0.0 adds automatic refresh after report storage. Use the suite's
+Download stage on the administrative machine so that the receiver and publisher
+are installed together. Run the report installer with `-EnableDynamicOverview`
+and pass any existing excluded batch IDs on migration from 0.7. The receiver
+reuses its connection, preserves those exclusions, and reconciles the snapshot
+on both storage and retry. Identical inputs retain the existing snapshot.
+If concurrent publication fails, rerun the receiver to reconcile the already
+stored report. Standalone publication remains available for recovery.
+An open visible Overview checks the published snapshot once a minute and on
+return to the tab. Its timestamp is the publication time.
 The device and account selectors apply to the entire overview. The extension and
 detection search fields narrow their respective distributions. Historical totals
 include repeat observations. The device count represents reporting identities.

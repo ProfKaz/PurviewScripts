@@ -1,9 +1,10 @@
 <#PSScriptInfo
-.VERSION 0.5.0
+.VERSION 0.6.0
 .GUID 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+0.6.0 Refresh the configured overview following verified report storage or reuse.
 2026-11-23 0.5.0 Validate and project managed inventory runs separately from Purview SIT reports.
 2026-11-21 0.3.0 W06C read-only reporting from accepted sealed evidence.
 2026-11-21 0.2.0 Optional W06B2 central acceptance publication after fresh remote validation and ACL review.
@@ -13,7 +14,7 @@
 .DESCRIPTION
 Downloads and validates a sealed batch with existing Setup identity and PS5.1 contract. Optional central acceptance add/readback; no endpoint outbox access.
 .NOTES
-Version     : 0.5.0
+Version     : 0.6.0
 Tracking ID : 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 #>
 #Requires -Version 7.4
@@ -227,6 +228,13 @@ try{
    $report.ReportSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($stored)))
    $report.SitTypes=$report.BySit.Count
    $report.Remove('BySit')
+   $publisher=Join-Path $PSScriptRoot '../../deployment/Publish-ScannerPortalOverview.ps1'
+   try {
+    $report.OverviewRefresh = & $publisher -TenantId $TenantId -SiteUrl $SiteUrl -PortalClientId $PortalClientId -Connection $connection -AfterIngestion
+    if ($report.OverviewRefresh.Outcome -eq 'Published') { $report.SharePointChanged=$true }
+   } catch {
+    throw "Report stored and verified. Overview refresh failed. Retry this reception to reconcile it. $($_.Exception.Message)"
+   }
   }
   Write-Host ($(if($ManagedInventory){'=== MANAGED INVENTORY FOR SHARING ==='}elseif($StoreReport){'=== WORK W06D PARA COMPARTIR ==='}else{'=== WORK W06C PARA COMPARTIR ==='})) -ForegroundColor Magenta
   Write-Host ($report|ConvertTo-Json -Depth 8) -ForegroundColor Magenta
