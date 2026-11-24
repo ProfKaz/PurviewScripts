@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.1.0
+.VERSION 0.1.1
 .GUID cb5b26cc-fe13-42c3-bd04-300bcb57dc9e
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.1.1 Follow server paging and checkpoint only after all returned items are inspected.
 0.1.0 Discover committed managed inventory runs, checkpoint discovery and retry pending reception.
 #>
 #Requires -Version 7.4
@@ -58,24 +59,32 @@ try {
         $stored=0
         $reused=0
         try {
-            do {
-                $cursor=[int]$state.cursor
-                $query="<View Scope='RecursiveAll'><Query><Where><Gt><FieldRef Name='ID'/><Value Type='Counter'>$cursor</Value></Gt></Where><OrderBy><FieldRef Name='ID' Ascending='TRUE'/></OrderBy></Query><ViewFields><FieldRef Name='ID'/><FieldRef Name='FileRef'/><FieldRef Name='FSObjType'/></ViewFields><RowLimit>200</RowLimit></View>"
-                $page=@(Get-PnPListItem -List $landing.Id -Query $query -Connection $conn)
-                foreach ($item in $page) {
+            $cursor=[int]$state.cursor
+            $highest=$cursor
+            $query="<View Scope='RecursiveAll'><Query><Where><Gt><FieldRef Name='ID'/><Value Type='Counter'>$cursor</Value></Gt></Where><OrderBy Override='TRUE'><FieldRef Name='ID' Ascending='TRUE'/></OrderBy></Query><ViewFields><FieldRef Name='ID'/><FieldRef Name='FileRef'/><FieldRef Name='FSObjType'/></ViewFields></View>"
+            # PnP follows SharePoint's continuation token. Only checkpoint after the complete enumeration.
+            Get-PnPListItem -List $landing.Id -Query $query -PageSize 200 -Connection $conn | ForEach-Object {
+                $item=$_
+                $id=[int]$item.FieldValues.ID
+                if ($id -le 0) { $id=[int]$item.Id }
+                if ($id -le 0) {throw "Missing positive Landing item ID during discovery after cursor $cursor."}
+                if ($id -gt $cursor) {
                     $path=[string]$item.FieldValues.FileRef
-                    if ($item.Id -le $state.cursor) {throw 'Discovery returned an unordered item ID.'}
+                    if (!$path -or $null -eq $item.FieldValues.FSObjType) {throw "Missing Landing item metadata at ID $id."}
                     if ([int]$item.FieldValues.FSObjType -eq 0 -and $path.StartsWith($root+'/',[StringComparison]::OrdinalIgnoreCase)) {
                         $relative=$path.Substring($root.Length+1)
-                        if ($relative -cmatch '^devices/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})/batches/([a-f0-9]{32})/manifest\.json$') {
+                        if ($relative -cmatch '^devices/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})/batches/([a-f0-9]{32})/manifest\.json$' -and !$state.pending.Contains($relative)) {
                             $state.pending[$relative]=@{registration=$Matches[1];hash='';error=''}
                             $discovered++
                         }
                     }
-                    $state.cursor=$item.Id
+                    $highest=[Math]::Max($highest,$id)
                 }
-                if ($page.Count) {Save-Queue}
-            } while ($page.Count -ge 200)
+            }
+            if ($highest -gt $cursor) {
+                $state.cursor=$highest
+                Save-Queue
+            }
             foreach ($path in @($state.pending.Keys)) {
                 $job=$state.pending[$path]
                 try {

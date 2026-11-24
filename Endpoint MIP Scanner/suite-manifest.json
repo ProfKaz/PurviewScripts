@@ -6,12 +6,12 @@
   "Scripts": [
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Start-ScannerPortalReceiver.ps1",
-      "Version": "0.1.0",
+      "Version": "0.1.1",
       "TrackingId": "cb5b26cc-fe13-42c3-bd04-300bcb57dc9e"
     },
     {
       "Path": "ScannerPortal/tests/Test-ReceiverDiscovery.ps1",
-      "Version": "0.1.0",
+      "Version": "0.1.1",
       "TrackingId": "89818a36-b63a-42b7-9d02-fd38f819ae56"
     },
     {
