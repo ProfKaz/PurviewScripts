@@ -11,3 +11,5 @@
 .body caption { text-align: start; font-weight: 600; margin-block: .5rem; }
 .body td, .body th { text-align: start; padding: .45rem; border-bottom: 1px solid "[theme:neutralLight, default:#ddd]"; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .report { grid-template-columns: minmax(0, 1fr); } .nav { flex-direction: row; flex-wrap: wrap; } }
+.brand { display: flex; align-items: center; gap: .5rem; margin-top: 1.5rem; font-size: .85rem; }
+.brand::before { content: ''; width: 32px; height: 32px; background: url('./kaz-demos.png') center / contain no-repeat; }

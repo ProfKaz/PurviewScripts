@@ -6,6 +6,14 @@ It reads the acceptance list in the current site through the signed-in
 SharePoint session. The package includes its client assets and requests no
 additional API permissions.
 
+Version 0.6.0.0 adds **Consolidated inventory** to the existing web part.
+Select the accepted cycles for one device. The selector reads the 50 most
+recent acceptance items and includes those with a saved managed inventory
+report. Counts sum file observations across the selected cycles. The pilot
+generation spans acceptance items 4, 6 and 5 (closing cycle), totaling 517
+observations. Item 3 belongs to an earlier scan. The selection is local to
+the view and does not modify the acceptance list.
+
 Build with Node.js 24 and npm:
 
 ```powershell
@@ -33,7 +41,7 @@ using the existing Setup app for the one-time interactive administrator
 sign-in. DownloadOnly downloads and verifies without requiring PnP.
 The site collection App Catalog must already be enabled. The script uploads
 and installs at Site scope, verifies the version, and reuses an existing
-installation of that version. It supports upgrading pilot versions 0.1.0.0 and 0.2.0.0 to 0.3.0.0.
+installation of that version. Version 0.6.0.0 supports upgrades from pilot versions 0.1 through 0.5.
 Portal viewers do not run this installer or install Node, npm, or PowerShell.
 Placement and configuration of the web part on the protected page follow
 installation.

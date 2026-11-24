@@ -7,6 +7,8 @@ import { Dropdown, IDropdownOption, Pivot, PivotItem } from '@fluentui/react';
 import { parseAcceptanceIds, parseReport, Report } from './report';
 import { ReportView } from './ReportView';
 import { ConfigurationView } from './ConfigurationView';
+import { ConsolidatedView, Cycle } from './ConsolidatedView';
+import styles from './ReportView.module.scss';
 
 interface ReportProperties {
   acceptanceListId: string;
@@ -61,13 +63,38 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
     const report = React.createElement(React.Fragment, null, selector,
       React.createElement(ReportView, { report: this.report, error: this.error, key: this.request }));
     const path = this.properties.publishedProfilePath?.trim();
-    this.root?.render(path
-      ? React.createElement(Pivot, { 'aria-label': 'Scanner Portal' },
+    this.root?.render(React.createElement(React.Fragment, null,
+        React.createElement(Pivot, { 'aria-label': 'Scanner Portal' },
           React.createElement(PivotItem, { headerText: 'Reports' }, report),
-          React.createElement(PivotItem, { headerText: 'Configuration' },
-            React.createElement(ConfigurationView, { key: path, path, load: this.loadProfile })))
-      : report);
+          React.createElement(PivotItem, { headerText: 'Consolidated inventory' },
+            React.createElement(ConsolidatedView, { key: listId, load: this.loadCycles })),
+          path && React.createElement(PivotItem, { headerText: 'Configuration' },
+            React.createElement(ConfigurationView, { key: path, path, load: this.loadProfile }))),
+        React.createElement('footer', { className: styles.brand }, 'Powered by KazDemos')));
   }
+
+  private readonly loadCycles = async (): Promise<Cycle[]> => {
+    const id = (this.properties.acceptanceListId || '').trim();
+    if (!/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(id)) throw new Error('Invalid list.');
+    const url = this.context.pageContext.web.absoluteUrl + "/_api/web/lists(guid'" + id +
+      "')/items?$select=Id,ReportingDeviceId,Title,BatchId,ManifestSha256,PortalReportJson&$orderby=Id desc&$top=50";
+    const response = await this.context.spHttpClient.get(url, SPHttpClient.configurations.v1);
+    if (!response.ok) throw new Error('Cannot read reports.');
+    const data = await response.json() as { value: (Parameters<typeof parseReport>[0] & { Id: number; ReportingDeviceId: string })[] };
+    const rows: Cycle[] = [];
+    const seen = new Set<string>();
+    for (const item of data.value) {
+      if (!item.PortalReportJson) continue;
+      const report = parseReport(item);
+      if (!report.ManagedInventory) continue;
+      const device = (item.ReportingDeviceId || '').toLowerCase();
+      const key = device + '/' + report.BatchId.toLowerCase();
+      if (!device || seen.has(key)) throw new Error('Ambiguous cycle identity.');
+      seen.add(key);
+      rows.push({ id: item.Id, device, report });
+    }
+    return rows;
+  };
 
   private readonly loadProfile = async (path: string): Promise<ArrayBuffer> => {
     const web = this.context.pageContext.web;
