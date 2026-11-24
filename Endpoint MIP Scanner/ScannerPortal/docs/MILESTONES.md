@@ -17,6 +17,10 @@ Cada milestone se cierra por evidencia de aceptación, no por porcentaje de arch
 
 ## Consola de gobierno de datos
 
+El piloto confirmó la recepción del ítem 118 y la publicación del resumen de 117 ejecuciones. La tarea de arranque del host administrativo está implementada y pendiente de validación en el tenant. Ver [instalación y prueba de reinicio](RECEIVER-HOST.md).
+
+Referencia visual para la fase posterior: navegación lateral en inglés, resumen ejecutivo, filtros, cobertura, tendencias de clasificación, prioridades y tabla operativa del mockup Designer. Cada indicador debe usar datos medidos y fecha de corte.
+
 **Recepción automática de inventario administrado (0.9, piloto).** Implementada la detección de manifiestos, validación de asignación, cola local con cursor por biblioteca y recuperación por lote. Prueba pendiente en el tenant: dejar el receptor activo, recibir un nuevo ciclo de un equipo asignado, observar la aceptación y el resumen desde una página abierta y reiniciar el receptor sin duplicar resultados. El alta de una identidad de servicio central y su operación permanente después de reiniciar el host se validarán por separado.
 
 Secuencia del piloto: validar en SPO la actualización automática del resumen, automatizar la recepción de lotes, incorporar el registro de equipos y su última comunicación, y construir el inventario vigente. La gestión de perfiles y bajas desde el portal requiere permisos por función y auditoría. El pie del web part mostrará la versión del manifiesto SPFx a partir del próximo paquete.

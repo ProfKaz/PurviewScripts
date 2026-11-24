@@ -5,6 +5,16 @@
   "Bootstrap": "Install-EndpointMIPScanner.ps1",
   "Scripts": [
     {
+      "Path": "ScannerPortal/deployment/Install-ScannerPortalReceiverTask.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "a3efe777-a548-4386-bdbb-f6626e8d512f"
+    },
+    {
+      "Path": "ScannerPortal/deployment/Invoke-ScannerPortalReceiverTask.ps1",
+      "Version": "0.1.0",
+      "TrackingId": "eb0d3972-d283-467f-9f24-fcfa4f29a6a3"
+    },
+    {
       "Path": "ScannerPortal/Work/SharePointUpload/Start-ScannerPortalReceiver.ps1",
       "Version": "0.1.1",
       "TrackingId": "cb5b26cc-fe13-42c3-bd04-300bcb57dc9e"
