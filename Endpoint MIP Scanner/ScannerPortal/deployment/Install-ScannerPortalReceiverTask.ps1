@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.1.0
+.VERSION 0.1.1
 .GUID a3efe777-a548-4386-bdbb-f6626e8d512f
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.1.1 Resolve PnP.PowerShell in an isolated machine runtime and stage the package when missing.
 0.1.0 Provision a site-scoped receiver application, machine certificate and recurring startup task.
 #>
 #Requires -Version 7.4
@@ -67,9 +68,34 @@ try {
         $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($sid),$rights,'ContainerInherit,ObjectInherit','None','Allow'))
     }
     Set-Acl -LiteralPath $state -AclObject $acl
-    $allUsersModule=Join-Path $env:ProgramFiles 'PowerShell/Modules/PnP.PowerShell/3.2.0/PnP.PowerShell.psd1'
-    if (!(Test-Path -LiteralPath $allUsersModule)) {Install-Module PnP.PowerShell -RequiredVersion 3.2.0 -Scope AllUsers -Repository PSGallery -Force}
-    if (!(Test-Path -LiteralPath $allUsersModule)) {throw 'PnP.PowerShell 3.2.0 must be installed for all users.'}
+    # Use the scheduled task runtime, excluding the administrator's profile and loaded assemblies.
+    $moduleProbe = & $exe -NoLogo -NoProfile -NonInteractive -Command {
+        $ErrorActionPreference = 'Stop'
+        $shared = Join-Path $env:ProgramFiles 'PowerShell/Modules'
+        $legacy = Join-Path $env:ProgramFiles 'WindowsPowerShell/Modules'
+        $env:PSModulePath = @($shared, $legacy, (Join-Path $PSHOME 'Modules')) -join [IO.Path]::PathSeparator
+        $version = '3.2.0'
+        $available = Get-Module -ListAvailable -Name PnP.PowerShell |
+            Where-Object Version -eq ([version]$version) | Select-Object -First 1
+        if (!$available) {
+            $parent = [IO.Directory]::CreateDirectory((Join-Path $shared 'PnP.PowerShell')).FullName
+            $destination = Join-Path $parent $version
+            if (Test-Path -LiteralPath $destination) { throw "Incomplete module at $destination. Inspect this directory before retrying." }
+            $stage = [IO.Directory]::CreateDirectory((Join-Path $parent ('.staging-' + [guid]::NewGuid().ToString('N')))).FullName
+            Save-PSResource -Name PnP.PowerShell -Version $version -Repository PSGallery -Path $stage -TrustRepository -ErrorAction Stop
+            $stagedVersion = Join-Path $stage "PnP.PowerShell/$version"
+            if (!(Test-Path -LiteralPath (Join-Path $stagedVersion 'PnP.PowerShell.psd1'))) {
+                throw "Downloaded module is incomplete. Inspect $stage."
+            }
+            [IO.Directory]::Move($stagedVersion, $destination)
+            [IO.Directory]::Delete((Join-Path $stage 'PnP.PowerShell'))
+            [IO.Directory]::Delete($stage)
+        }
+        $module = Import-Module PnP.PowerShell -RequiredVersion $version -PassThru -ErrorAction Stop
+        $module.Path
+    }
+    if ($LASTEXITCODE -ne 0 -or !$moduleProbe) { throw 'Machine runtime could not import PnP.PowerShell 3.2.0. See the preceding module error.' }
+    Write-Host "Receiver module verified: $moduleProbe"
     if (!(Get-Module -ListAvailable Microsoft.Graph.Authentication)) {Install-Module Microsoft.Graph.Authentication -Scope CurrentUser -Repository PSGallery -Force}
     Import-Module Microsoft.Graph.Authentication
     $saved=if ([IO.File]::Exists($metadata)) {Get-Content -LiteralPath $metadata -Raw|ConvertFrom-Json}
