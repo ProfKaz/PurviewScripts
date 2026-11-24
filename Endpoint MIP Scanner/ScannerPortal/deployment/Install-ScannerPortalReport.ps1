@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.5.0
+.VERSION 0.6.0
 .GUID 7bb7b04d-f2b8-4d7d-8840-ec9a8972352b
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.6.0 Install consolidated inventory and KazDemos branding.
 0.5.0 Install the managed inventory report view.
 0.4.0 Install the read-only published profile preview.
 0.3.0 Install the report history selector, upgrading either previous pilot package.
@@ -23,11 +24,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$version = [version]'0.5.0.0'
-$priorVersions = @([version]'0.1.0.0', [version]'0.2.0.0', [version]'0.3.0.0', [version]'0.4.0.0')
+$version = [version]'0.6.0.0'
+$priorVersions = @([version]'0.1.0.0', [version]'0.2.0.0', [version]'0.3.0.0', [version]'0.4.0.0', [version]'0.5.0.0')
 $productId = [guid]'5670f3cc-719f-44e2-a809-b9ddd68f674a'
-$expectedHash = '10A1E84C7A6EEA038FD7F14DFF719BA89BBDCD218DBB567C41458785D99FAB29'
-$url = 'https://raw.githubusercontent.com/ProfKaz/PurviewScripts/28fe4b51c14ea2b9fe56073913697e02a9def017/Endpoint%20MIP%20Scanner/ScannerPortal/ui/packages/scanner-report-0.5.0.sppkg'
+$expectedHash = '3B1B4BC706830A39892BA13AAEFB0C2D1DDEFDF83778DA48563F32EA7A743D5B'
+$url = 'https://raw.githubusercontent.com/ProfKaz/PurviewScripts/82ac0536d955ac56d30bcff46fd4601de3c61592/Endpoint%20MIP%20Scanner/ScannerPortal/ui/packages/scanner-report-0.6.0.sppkg'
 if (-not $DownloadOnly) {
     if ($TenantId -eq [guid]::Empty -or $PortalClientId -eq [guid]::Empty -or
         $SiteUrl.Scheme -ne 'https' -or $SiteUrl.Host -notmatch '^[a-z0-9-]+\.sharepoint\.com$' -or
@@ -94,7 +95,7 @@ if (-not $DownloadOnly) {
                         throw 'The verified package is already in the catalog, but its app record could not be identified uniquely.'
                     }
                     $app = $matches[0]
-                } elseif ($existingHash -cin @('C9645145783F9DDFDC25ECCC5D2560A14B6535572EDC11D5CF2B7743EA699796', 'CE9BBA15A5613AA884B017B31F5FCC9405F69AE7C8B94FE32BEFF17256CFAB49', 'D15B1AB2293416D8C171DADB69AB6F291CDFE5E71042D184A7812445C441FA32', '37AF747ED9B9CE8EBEFD0180CC33BDC4544834EA9DE9321CC456B3305A123289')) {
+                } elseif ($existingHash -cin @('C9645145783F9DDFDC25ECCC5D2560A14B6535572EDC11D5CF2B7743EA699796', 'CE9BBA15A5613AA884B017B31F5FCC9405F69AE7C8B94FE32BEFF17256CFAB49', 'D15B1AB2293416D8C171DADB69AB6F291CDFE5E71042D184A7812445C441FA32', '37AF747ED9B9CE8EBEFD0180CC33BDC4544834EA9DE9321CC456B3305A123289', '10A1E84C7A6EEA038FD7F14DFF719BA89BBDCD218DBB567C41458785D99FAB29')) {
                     $overwritePrior = $true
                 } else {
                     throw "Catalog file already exists without matching app metadata. Its hash is $existingHash. No overwrite was attempted."
