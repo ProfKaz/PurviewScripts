@@ -1,9 +1,10 @@
 <#PSScriptInfo
-.VERSION 0.6.0
+.VERSION 0.7.0
 .GUID 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+0.7.0 Allow the discovery worker to reuse its authenticated site connection.
 0.6.0 Refresh the configured overview following verified report storage or reuse.
 2026-11-23 0.5.0 Validate and project managed inventory runs separately from Purview SIT reports.
 2026-11-21 0.3.0 W06C read-only reporting from accepted sealed evidence.
@@ -14,7 +15,7 @@
 .DESCRIPTION
 Downloads and validates a sealed batch with existing Setup identity and PS5.1 contract. Optional central acceptance add/readback; no endpoint outbox access.
 .NOTES
-Version     : 0.6.0
+Version     : 0.7.0
 Tracking ID : 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 #>
 #Requires -Version 7.4
@@ -22,6 +23,7 @@ Tracking ID : 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 param([Parameter(Mandatory)][guid]$TenantId,[Parameter(Mandatory)][uri]$SiteUrl,
  [Parameter(Mandatory)][guid]$PortalClientId,[Parameter(Mandatory)][guid]$ListId,
  [Parameter(Mandatory)][string]$TargetRelativePath,[Parameter(Mandatory)][string]$ExpectedManifestSha256,
+ [object]$ReceiverConnection,
  [string]$VerificationModulePath,[switch]$ManagedInventory,[switch]$PublishAcceptance,[switch]$ReportAcceptedBatch,[switch]$StoreReport,[guid]$AcceptanceListId=[guid]::Empty,[switch]$AcknowledgePublisherDenied,
  [string]$StateDirectory=(Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner/Work/PortalReceiver'))
 $ErrorActionPreference='Stop'
@@ -121,7 +123,7 @@ function Get-WorkAcceptance {
 try{
  if(-not(Get-Module -ListAvailable PnP.PowerShell|Where-Object Version -eq ([version]'3.2.0'))){Install-Module PnP.PowerShell -RequiredVersion 3.2.0 -Scope CurrentUser -Repository PSGallery -Force}
  Import-Module PnP.PowerShell -RequiredVersion 3.2.0
- $connection=Connect-PnPOnline -Url $SiteUrl.AbsoluteUri.TrimEnd('/') -Tenant $TenantId -ClientId $PortalClientId -Interactive -ReturnConnection
+ $connection=if ($ReceiverConnection) {$ReceiverConnection} else {Connect-PnPOnline -Url $SiteUrl.AbsoluteUri.TrimEnd('/') -Tenant $TenantId -ClientId $PortalClientId -Interactive -ReturnConnection}
  $web=Get-PnPWeb -Includes Url -Connection $connection
  if($web.Url.TrimEnd('/') -ne $SiteUrl.AbsoluteUri.TrimEnd('/')){throw 'Connected site mismatch.'}
  $list=Get-PnPList -Identity $ListId -Includes Id,Title,BaseTemplate,RootFolder -Connection $connection
@@ -261,7 +263,7 @@ try{
  Write-Host ($result|ConvertTo-Json -Depth 12) -ForegroundColor Magenta
  [pscustomobject]$result
 }finally{
- if($connection){Disconnect-PnPOnline -ErrorAction SilentlyContinue}
+ if($connection -and !$ReceiverConnection){Disconnect-PnPOnline -ErrorAction SilentlyContinue}
  if([IO.Directory]::Exists($temp)){
   if([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($temp)) -cne $StateDirectory){throw 'Unsafe temporary download cleanup.'}
   [IO.Directory]::Delete($temp,$true)

@@ -8,6 +8,28 @@ additional API permissions.
 
 ### Executive overview (0.7.0.0)
 
+In 0.9.0 the footer shows the loaded web part version. Install the receiver on
+the administrative host using the suite Download stage. After enabling dynamic
+overview, run `Work/SharePointUpload/Start-ScannerPortalReceiver.ps1` with
+`-SiteUrl`, `-TenantId`, `-PortalClientId`, `-AcknowledgePublisherDenied` and
+`-Watch`. Use the existing Setup sign-in for the interactive pilot. Leave
+the process running. Without Watch the command executes one discovery pass.
+For a preprovisioned dedicated receiver application, `-CertificateThumbprint`
+selects certificate authentication. Its SharePoint rights must permit all of
+the existing receiver ACL checks, acceptance writes and overview publication.
+Provisioning and reboot recovery for that identity require tenant validation.
+
+Discovery pages by increasing landing item ID. It processes new endpoint-created
+manifest items under devices/{registration}/batches/{run}, including existing
+items on the first pass. It verifies that the registration has a configuration
+assignment. The initial hash is observed in Landing and saved for retry. This
+provides consistency across reads, not independent endpoint attestation.
+Accepted evidence and per-file hashes are checked by the existing receiver.
+Failed jobs remain pending and are retried independently. The source folder must
+receive manifest.json last at its final path, as the managed endpoint uploader does.
+The cursor and pending queue are scoped to the tenant and library under
+LOCALAPPDATA/EndpointMIPScanner/PortalReceiver. Run one worker per state directory.
+
 Run `deployment/Publish-ScannerPortalOverview.ps1` as the portal administrator with
 `-SiteUrl`, `-TenantId` and `-PortalClientId`. Supply known test batch IDs through
 `-ExcludeBatchId` on each refresh. The publisher pages through the acceptance ledger
