@@ -170,3 +170,13 @@ console and keeps it in the same job so stopping the host also stops the scanner
 cycle status in last-status.json and launcher or startup errors in task-startup-error.log
 under the user's ManagedEndpoint directory. Validate logon using a paused profile, a new
 status timestamp, no visible console, and the expected task principal.
+
+### Resume a managed generation after upgrading from 1.4.2
+
+Older managed runs included the per-cycle log folder in the checkpoint scope. Version 1.4.3
+uses the existing exclusion of the managed data tree for all cycles. If there is a legacy
+active journal, the scanner can match its original scope using the retained cycle folders
+with cycle.json, while checking all other scope fields as before. Stop the task, install the
+new machine package, and register and start the task again as the enrolled user. Keep the
+managed state and logs in place for recovery. Validate the same generation ID and a positive
+resumedDirectories count in the next uploaded summary.

@@ -1,6 +1,6 @@
-﻿<#PSScriptInfo
+<#PSScriptInfo
 
-.VERSION 1.1.0
+.VERSION 1.1.1
 
 .GUID 7c0d3dbd-0194-44f2-abff-e46b1674bc67
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+2026-11-23 1.1.1 Managed checkpoint resumption across cycle log directories.
 2026-11-18  1.1.0  Consolidated Endpoint MIP Scanner layout, shared lab and unified setup.
 Tracking ID: 7c0d3dbd-0194-44f2-abff-e46b1674bc67
 #>
@@ -21,7 +22,7 @@ Endpoint MIP Scanner component: LocalMIPScanner.WinPS51/LocalMIPCheckpoint.ps1.
 .NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS51/LocalMIPCheckpoint.ps1
-Version     : 1.1.0
+Version     : 1.1.1
 Tracking ID : 7c0d3dbd-0194-44f2-abff-e46b1674bc67
 2026-11-18  Kaz Demos  First tracked suite release; preserves prior milestone implementation.
 #>
@@ -322,7 +323,7 @@ function Close-IncrementalState {
 }
 
 function Open-IncrementalState {
-    param([hashtable] $Settings, [string[]] $Roots, [string] $Scope)
+    param([hashtable] $Settings, [string[]] $Roots, [string] $Scope, [string[]] $PriorScopes)
     $directory = $Settings.StateDirectory
     $existing = [IO.DirectoryInfo]::new($directory)
     while (-not $existing.Exists -and $null -ne $existing.Parent) { $existing = $existing.Parent }
@@ -410,7 +411,7 @@ function Open-IncrementalState {
                 $header = $null
             } else {
                 if ($header.base -ne $index.Generation) { throw 'Journal base does not match the confirmed index.' }
-                if ($header.scope -cne $Scope) { throw 'Active journal scope changed. Resume with the original settings or archive the active journal while stopped.' }
+                if ($header.scope -cne $Scope -and $header.scope -cnotin $PriorScopes) { throw 'Active journal scope changed. Resume with the original settings or archive the active journal while stopped.' }
                 $state.Generation = $header.generation
                 Read-ActiveJournal $state
             }

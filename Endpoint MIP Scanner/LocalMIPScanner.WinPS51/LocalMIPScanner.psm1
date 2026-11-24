@@ -1,6 +1,6 @@
-﻿<#PSScriptInfo
+<#PSScriptInfo
 
-.VERSION 1.1.0
+.VERSION 1.1.1
 
 .GUID 618abe92-fc46-4d02-a9b1-f37377ae2206
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+2026-11-23 1.1.1 Managed checkpoint resumption across cycle log directories.
 2026-11-18  1.1.0  Consolidated Endpoint MIP Scanner layout, shared lab and unified setup.
 Tracking ID: 618abe92-fc46-4d02-a9b1-f37377ae2206
 #>
@@ -21,7 +22,7 @@ Endpoint MIP Scanner component: LocalMIPScanner.WinPS51/LocalMIPScanner.psm1.
 .NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS51/LocalMIPScanner.psm1
-Version     : 1.1.0
+Version     : 1.1.1
 Tracking ID : 618abe92-fc46-4d02-a9b1-f37377ae2206
 2026-11-18  Kaz Demos  First tracked suite release; preserves prior milestone implementation.
 #>
@@ -286,7 +287,7 @@ function Test-KeepInventoryEntry {
 
 function Invoke-LocalMIPInventory {
     param(
-        [string[]] $Root, [string] $ConfigDirectory, [string] $LogDirectory,
+        [string[]] $Root, [string] $ConfigDirectory, [string] $LogDirectory, [string] $LogScopeDirectory,
         [ValidateRange(0, 2147483647)] [int] $MaxDirectories = 0,
         [ValidateRange(0, 2147483647)] [int] $MaxSeconds = 0,
         [switch] $AuditContent
@@ -302,7 +303,16 @@ function Invoke-LocalMIPInventory {
     }
     $logPath = ConvertTo-LocalPath $LogDirectory
     $roots = @($Root | ForEach-Object { ConvertTo-LocalPath $_ } | Sort-Object -Property Length, { $_ })
-    $config.Exclusions += $logPath
+    $managedLogRoot = $null
+    if ($LogScopeDirectory) {
+        $managedLogRoot = ConvertTo-LocalPath $LogScopeDirectory
+        if (-not (Test-PathWithin $logPath $managedLogRoot) -or
+            -not $config.Exclusions.Where({ Test-PathWithin $managedLogRoot $_ }, 'First').Count) {
+            throw 'The managed log root must contain the log directory and already be excluded.'
+        }
+    } else {
+        $config.Exclusions += $logPath
+    }
     if ($incremental.Enabled) {
         $config.Exclusions += $incremental.StateDirectory
     } elseif ($MaxDirectories -gt 0 -or $MaxSeconds -gt 0) {
@@ -383,7 +393,20 @@ function Invoke-LocalMIPInventory {
             if ($AuditContent) { $scopeSettings.contentAudit = $config.ContentAudit.Fingerprint }
             $scopeJson = Get-StateJson $scopeSettings
             $scope = (Get-WinPSSha256 ([Text.Encoding]::UTF8.GetBytes($scopeJson)))
-            $state = Open-IncrementalState $incremental $activeRoots $scope
+            $priorScopes = @()
+            if ($managedLogRoot -and [IO.File]::Exists((Join-Path $incremental.StateDirectory 'inventory.active.jsonl'))) {
+                # Older managed clients included the per-cycle log directory in the journal scope.
+                # Try only historical cycle folders inside an already excluded tree, keeping every
+                # other scope field identical. New journals use the stable scope above.
+                $priorScopes = @(foreach ($oldCycle in Get-ChildItem -LiteralPath $managedLogRoot -Directory) {
+                    if ($oldCycle.Name -cnotmatch '^[a-f0-9]{32}$' -or
+                        ($oldCycle.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+                        -not [IO.File]::Exists((Join-Path $oldCycle.FullName 'cycle.json'))) { continue }
+                    $scopeSettings.exclusions = @(($config.Exclusions + $oldCycle.FullName) | Sort-Object -Unique)
+                    Get-WinPSSha256 ([Text.Encoding]::UTF8.GetBytes((Get-StateJson $scopeSettings)))
+                })
+            }
+            $state = Open-IncrementalState $incremental $activeRoots $scope $priorScopes
             $summary.generation = $state.Generation
             $summary.recoveredIndex = $state.Recovered
             $summary.stateLoadMilliseconds = $stateTimer.ElapsedMilliseconds

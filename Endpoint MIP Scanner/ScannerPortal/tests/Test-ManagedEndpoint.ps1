@@ -1,16 +1,17 @@
-﻿<#PSScriptInfo
-.VERSION 1.0.0
+<#PSScriptInfo
+.VERSION 1.0.1
 .GUID b1bf5e35-7203-41f1-b81a-8bbd55039fe6
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-23 1.0.1 Managed checkpoint resumption across cycle log directories.
 2026-11-20 1.0.0 Enrollment, configuration generations, real incremental scan and delivery fault tests.
 #>
 <#
 .DESCRIPTION
 Local integration tests; Graph transport mocked. Does not modify tenant or register a task.
 .NOTES
-Version     : 1.0.0
+Version     : 1.0.1
 Tracking ID : b1bf5e35-7203-41f1-b81a-8bbd55039fe6
 #>
 #Requires -Version 5.1
@@ -90,6 +91,29 @@ try{
     $scan=Get-PortalScanParameters $registration $cached $directory
     $state1=(Read-PortalJson (Join-Path $scan.ConfigDirectory 'incremental.json')).stateDirectory
     $scanner=Join-Path $PSScriptRoot '../../LocalMIPScanner.WinPS51/Invoke-LocalMIPScanner.ps1'
+    # Simulate the previously released runner's first cycle and resume it with fixed code.
+    [void][IO.Directory]::CreateDirectory((Join-Path $documents 'first-child'))
+    [void][IO.Directory]::CreateDirectory((Join-Path $documents 'second-child'))
+    $legacyScan=$scan.Clone()
+    $legacyScan.Remove('LogScopeDirectory')
+    $legacyScan.LogDirectory=Join-Path $scan.LogDirectory ([guid]::NewGuid().ToString('N'))
+    Write-PortalJson @{startedUtc=[datetime]::UtcNow.ToString('o');profile=@{Profile=@{profileId=$cached.Profile.profileId;version=$cached.Profile.version};Sha256=$cached.Sha256;Source='Cache'}} (Join-Path $legacyScan.LogDirectory 'cycle.json')
+    $legacy=& $scanner @legacyScan -MaxDirectories 1
+    $resumedScan=$scan.Clone()
+    $resumedScan.LogDirectory=Join-Path $scan.LogDirectory ([guid]::NewGuid().ToString('N'))
+    $resumed=& $scanner @resumedScan
+    Assert (-not $legacy.generationComplete -and $resumed.generationComplete -and $resumed.resumedDirectories -eq 1 -and
+        $resumed.generation -eq $legacy.generation -and $legacy.contentAudited -eq 1) 'Existing managed journal did not resume under a different log folder.'
+
+    $startScan=$scan.Clone()
+    $startScan.LogDirectory=Join-Path $scan.LogDirectory ([guid]::NewGuid().ToString('N'))
+    $stableFirst=& $scanner @startScan -MaxDirectories 1
+    $closeScan=$scan.Clone()
+    $closeScan.LogDirectory=Join-Path $scan.LogDirectory ([guid]::NewGuid().ToString('N'))
+    $stableClose=& $scanner @closeScan
+    Assert (-not $stableFirst.generationComplete -and $stableClose.generationComplete -and
+        $stableClose.generation -eq $stableFirst.generation -and $stableClose.resumedDirectories -eq 1) 'A new managed journal could not resume across log folders.'
+
     $first=& $scanner @scan
     $restart=Join-Path $fixture 'restart-cache.ps1'
     [IO.File]::WriteAllText($restart,'param($ModulePath,$Directory) $ErrorActionPreference="Stop"; Import-Module $ModulePath -Force; $null=Get-PortalCachedProfile $Directory',[Text.UTF8Encoding]::new($true))
@@ -97,7 +121,7 @@ try{
     Assert ($LASTEXITCODE -eq 0) 'A fresh PS5.1 process could not restore the cached profile.'
     $scan=Get-PortalScanParameters $registration $cached $directory
     $second=& $scanner @scan
-    Assert ($first.contentAudited -eq 1 -and $second.contentAudited -eq 0 -and $second.contentAuditReused -eq 1) 'Real scanner failed content delta reuse.'
+    Assert ($first.contentAuditReused -eq 1 -and $second.contentAudited -eq 0 -and $second.contentAuditReused -eq 1) 'Real scanner failed content delta reuse.'
     Assert ((Get-FileHash -LiteralPath $file).Hash -eq $sourceHash) 'Audit modified the source.'
     $profile.execution.idleSeconds=600L
     Write-PortalJson $profile $profilePath

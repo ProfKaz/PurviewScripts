@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 1,
-  "SuiteVersion": "1.4.2",
+  "SuiteVersion": "1.4.3",
   "Project": "Endpoint MIP Scanner",
   "Bootstrap": "Install-EndpointMIPScanner.ps1",
   "Scripts": [
@@ -11,12 +11,12 @@
     },
     {
       "Path": "LocalMIPScanner.WinPS51/Invoke-LocalMIPScanner.ps1",
-      "Version": "1.1.0",
+      "Version": "1.1.1",
       "TrackingId": "ad7c5a2e-6eb7-4fbd-9195-b0368dd692a5"
     },
     {
       "Path": "LocalMIPScanner.WinPS51/LocalMIPCheckpoint.ps1",
-      "Version": "1.1.0",
+      "Version": "1.1.1",
       "TrackingId": "7c0d3dbd-0194-44f2-abff-e46b1674bc67"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "Path": "LocalMIPScanner.WinPS51/LocalMIPScanner.psm1",
-      "Version": "1.1.0",
+      "Version": "1.1.1",
       "TrackingId": "618abe92-fc46-4d02-a9b1-f37377ae2206"
     },
     {
@@ -201,7 +201,7 @@
     },
     {
       "Path": "Install-EndpointMIPScanner.ps1",
-      "Version": "1.4.2",
+      "Version": "1.4.3",
       "TrackingId": "0576cc7a-692e-4876-bfe5-d1fb62a30116"
     },
     {
@@ -251,7 +251,7 @@
     },
     {
       "Path": "ScannerPortal/src/ScannerPortal.Endpoint.psm1",
-      "Version": "1.0.0",
+      "Version": "1.0.1",
       "TrackingId": "a0bd04b9-f8bf-44bf-93d2-de2a27099420"
     },
     {
@@ -276,7 +276,7 @@
     },
     {
       "Path": "ScannerPortal/tests/Test-ManagedEndpoint.ps1",
-      "Version": "1.0.0",
+      "Version": "1.0.1",
       "TrackingId": "b1bf5e35-7203-41f1-b81a-8bbd55039fe6"
     },
     {

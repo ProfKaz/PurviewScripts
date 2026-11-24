@@ -1,16 +1,17 @@
-﻿<#PSScriptInfo
-.VERSION 1.0.0
+<#PSScriptInfo
+.VERSION 1.0.1
 .GUID a0bd04b9-f8bf-44bf-93d2-de2a27099420
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-23 1.0.1 Managed checkpoint resumption across cycle log directories.
 2026-11-20 1.0.0 Certificate enrollment, validated pull profiles and verified report delivery.
 #>
 <#
 .DESCRIPTION
 PS5.1 endpoint control-plane pilot. Application identity is shared, not per-device authorization.
 .NOTES
-Version     : 1.0.0
+Version     : 1.0.1
 Tracking ID : a0bd04b9-f8bf-44bf-93d2-de2a27099420
 #>
 #Requires -Version 5.1
@@ -215,7 +216,8 @@ function Get-PortalScanParameters($Registration,$Profile,[string]$Directory) {
     # A changed scope starts a separate resumable generation; an old journal is never discarded.
     $incremental.stateDirectory=Join-Path (Join-Path $base $Registration.registrationId) $hash
     Write-PortalJson $incremental (Join-Path $Profile.ConfigDirectory 'incremental.json') -Bom
-    @{Root=@($Profile.Profile.execution.roots);ConfigDirectory=$Profile.ConfigDirectory;LogDirectory=(Join-Path $Directory 'logs')
+    $logs=Join-Path $Directory 'logs'
+    @{Root=@($Profile.Profile.execution.roots);ConfigDirectory=$Profile.ConfigDirectory;LogDirectory=$logs;LogScopeDirectory=$logs
         MaxSeconds=[int]$Profile.Profile.execution.maxSeconds;AuditContent=[bool]$Profile.Profile.execution.auditContent}
 }
 
