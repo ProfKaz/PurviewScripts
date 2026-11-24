@@ -155,3 +155,18 @@ En el equipo administrativo, usar la etapa `ControlPlane -ControlPlaneAction Ini
 reconoce únicamente por su identidad explícita y su rol Contribute en Landing. Se conserva su
 concesión. El instalador genera `endpoint-bootstrap.json` dentro de `ControlPlaneStateDirectory`
 y devuelve la ruta como `bootstrapPath`. Conservar el resto del estado en el equipo administrativo.
+
+### Console-free task rollout
+
+For a Program Files deployment, stop the existing managed task before upgrading to 1.4.2.
+Run EndpointInstall from an elevated Windows PowerShell 5.1 console, then run EndpointConfigure
+with RegisterTask from the enrolled user's non-elevated session. This reuses the existing
+registration and assignment. When the bootstrap was provided only at enrollment, supply its
+path again during task registration. The installer compiles the Windows application host
+locally and task registration checks its SHA-256 against the machine installation record.
+
+The task still uses Interactive and Limited. The host starts Windows PowerShell without a
+console and keeps it in the same job so stopping the host also stops the scanner. Look for
+cycle status in last-status.json and launcher or startup errors in task-startup-error.log
+under the user's ManagedEndpoint directory. Validate logon using a paused profile, a new
+status timestamp, no visible console, and the expected task principal.

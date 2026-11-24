@@ -1,6 +1,6 @@
 {
   "SchemaVersion": 1,
-  "SuiteVersion": "1.4.1",
+  "SuiteVersion": "1.4.2",
   "Project": "Endpoint MIP Scanner",
   "Bootstrap": "Install-EndpointMIPScanner.ps1",
   "Scripts": [
@@ -201,7 +201,7 @@
     },
     {
       "Path": "Install-EndpointMIPScanner.ps1",
-      "Version": "1.4.1",
+      "Version": "1.4.2",
       "TrackingId": "0576cc7a-692e-4876-bfe5-d1fb62a30116"
     },
     {
@@ -261,7 +261,7 @@
     },
     {
       "Path": "ScannerPortal/deployment/Install-ScannerPortalEndpoint.ps1",
-      "Version": "1.0.0",
+      "Version": "1.0.1",
       "TrackingId": "ddfac335-a7c0-4110-aab4-540cc4eb826e"
     },
     {

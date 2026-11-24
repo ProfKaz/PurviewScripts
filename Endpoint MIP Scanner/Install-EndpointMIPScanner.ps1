@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.4.1
+.VERSION 1.4.2
 
 .GUID 0576cc7a-692e-4876-bfe5-d1fb62a30116
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+2026-11-23  1.4.2  Build the console-free managed task host.
 2026-11-23  1.4.1  Preserve the existing pilot Landing publisher during control plane setup.
 2026-11-23  1.4.0  Program Files installation and user-context endpoint configuration.
 2026-11-20  1.3.0  Portal control plane and managed endpoint enrollment stages.
@@ -26,7 +27,7 @@ Endpoint MIP Scanner component: Install-EndpointMIPScanner.ps1.
 .NOTES
 HISTORY
 Script      : Install-EndpointMIPScanner.ps1
-Version     : 1.4.1
+Version     : 1.4.2
 Tracking ID : 0576cc7a-692e-4876-bfe5-d1fb62a30116
 2026-11-18  Kaz Demos  First tracked suite release; preserves prior milestone implementation.
 #>
@@ -218,7 +219,7 @@ if ($Stage -eq 'EndpointConfigure') {
     }
     if ($RegisterTask) {
         if (-not $BootstrapPath) { throw 'Supply the existing endpoint-bootstrap.json with RegisterTask.' }
-        & (Join-Path $root 'ScannerPortal/deployment/Install-ScannerPortalEndpoint.ps1') -BootstrapPath $BootstrapPath -Directory $EndpointDirectory -RegisterTask
+        & (Join-Path $root 'ScannerPortal/deployment/Install-ScannerPortalEndpoint.ps1') -BootstrapPath $BootstrapPath -Directory $EndpointDirectory -RegisterTask -TaskHostSha256 $installed.TaskHostSha256
     } else {
         & (Join-Path $root 'ScannerPortal/Invoke-ScannerPortalEndpoint.ps1') -Directory $EndpointDirectory -SyncOnly
     }
@@ -248,7 +249,7 @@ try {
         $_.type -eq 'blob' -and $_.mode -in '100644','100755' -and $_.path.StartsWith($prefix)
     })
     if ($files.Count -eq 0) { throw 'Suite not found in this reference.' }
-    Write-Host "Endpoint MIP Scanner 1.4.1 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
+    Write-Host "Endpoint MIP Scanner 1.4.2 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
     Write-Host "Verifying $($files.Count) suite files in $root"
     $stamp = [guid]::NewGuid().ToString('N')
     $staging = Join-Path $work $stamp
@@ -301,7 +302,7 @@ try {
     }
     Write-SetupJson (Join-Path $work 'files.json') @{ Repository = $repository; Commit = $sha; Files = $manifest.ToArray() }
     $state = [ordered]@{
-        InstallId = $stamp; SuiteVersion = '1.4.1'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
+        InstallId = $stamp; SuiteVersion = '1.4.2'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
         Completed = @(); Status = 'Running'; RestartRequired = $false; VisualCppPackageSha256 = $null
     }
     $state.Completed += 'VerifiedDownload'
@@ -395,6 +396,18 @@ try {
         }
     }
     if ($Stage -eq 'EndpointInstall') {
+        $hostSource = Join-Path $root 'ScannerPortal/deployment/ScannerTaskHost.cs'
+        $hostBinary = Join-Path $root 'ScannerPortal/deployment/ScannerTaskHost.exe'
+        $stagedHost = Join-Path $staging 'ScannerTaskHost.exe'
+        Add-Type -Path $hostSource -OutputAssembly $stagedHost -OutputType WindowsApplication
+        if ([IO.File]::Exists($hostBinary)) {
+            if ([IO.File]::GetAttributes($hostBinary) -band [IO.FileAttributes]::ReparsePoint) { throw 'Reparse task host is not allowed.' }
+            [IO.File]::Replace($stagedHost, $hostBinary, [NullString]::Value)
+        } else {
+            [IO.File]::Move($stagedHost, $hostBinary)
+        }
+        $state.TaskHostSha256 = (Get-FileHash -LiteralPath $hostBinary -Algorithm SHA256).Hash
+        $state.Completed += 'SilentTaskHost'
         Invoke-ChildScript (Join-Path $PSHOME 'powershell.exe') (Join-Path $root 'LocalMIPScanner.WinPS51/tests/Test-StateFormat.ps1') @{}
         $state.Completed += 'ScannerStateSmokeTest'
         if ($BootstrapPath) {

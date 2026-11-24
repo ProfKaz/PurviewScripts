@@ -1,16 +1,17 @@
-﻿<#PSScriptInfo
-.VERSION 1.0.0
+<#PSScriptInfo
+.VERSION 1.0.1
 .GUID ddfac335-a7c0-4110-aab4-540cc4eb826e
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-23 1.0.1 Use the verified console-free host for Program Files deployments.
 2026-11-20 1.0.0 User-scope enrollment and optional least-privilege scheduled task.
 #>
 <#
 .DESCRIPTION
 Creates a public enrollment request. Repeat with RegisterTask after administrative approval.
 .NOTES
-Version     : 1.0.0
+Version     : 1.0.1
 Tracking ID : ddfac335-a7c0-4110-aab4-540cc4eb826e
 #>
 #Requires -Version 5.1
@@ -18,7 +19,8 @@ Tracking ID : ddfac335-a7c0-4110-aab4-540cc4eb826e
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$BootstrapPath,
     [string]$Directory=(Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner/ManagedEndpoint'),
-    [switch]$RegisterTask)
+    [switch]$RegisterTask,
+    [string]$TaskHostSha256)
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSScriptRoot '../src/ScannerPortal.Endpoint.psm1') -Force
 $Directory=Assert-PortalDirectory $Directory
@@ -33,6 +35,15 @@ if ($RegisterTask) {
     $runner=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../Invoke-ScannerPortalEndpoint.ps1'))
     if ($runner.Contains('"') -or $Directory.Contains('"')) { throw 'Invalid task argument path.' }
     $arguments='-NoProfile -NonInteractive -WindowStyle Hidden -File "' + $runner + '" -Directory "' + $Directory + '" -Continuous'
+    if ($PSBoundParameters.ContainsKey('TaskHostSha256')) {
+        $exe=Join-Path $PSScriptRoot 'ScannerTaskHost.exe'
+        if ($TaskHostSha256 -notmatch '^[a-f0-9]{64}$' -or
+            (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash -ne $TaskHostSha256) {
+            throw 'Task host verification failed. Rerun EndpointInstall.'
+        }
+        $trailingSlashes=$Directory.Length - $Directory.TrimEnd('\').Length
+        $arguments='"' + $Directory + ('\' * $trailingSlashes) + '"'
+    }
     $action=New-ScheduledTaskAction -Execute $exe -Argument $arguments
     $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     $principal=New-ScheduledTaskPrincipal -UserId $sid -LogonType Interactive -RunLevel Limited
