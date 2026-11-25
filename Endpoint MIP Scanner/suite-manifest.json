@@ -211,7 +211,7 @@
     },
     {
       "Path": "deployment/Install-MipSdkAudit.ps1",
-      "Version": "1.1.0",
+      "Version": "1.1.1",
       "TrackingId": "49a0bd91-1aa8-48c4-81f0-564cca166544"
     },
     {

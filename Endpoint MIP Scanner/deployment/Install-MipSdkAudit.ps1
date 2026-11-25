@@ -1,6 +1,6 @@
-﻿<#PSScriptInfo
+<#PSScriptInfo
 
-.VERSION 1.1.0
+.VERSION 1.1.1
 
 .GUID 49a0bd91-1aa8-48c4-81f0-564cca166544
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+2026-11-25  1.1.1  Extract the verified SDK with Windows tar and propagate extraction failures.
 2026-11-18  1.1.0  Consolidated Endpoint MIP Scanner layout, shared lab and unified setup.
 Tracking ID: 49a0bd91-1aa8-48c4-81f0-564cca166544
 #>
@@ -21,7 +22,7 @@ Endpoint MIP Scanner component: deployment/Install-MipSdkAudit.ps1.
 .NOTES
 HISTORY
 Script      : deployment/Install-MipSdkAudit.ps1
-Version     : 1.1.0
+Version     : 1.1.1
 Tracking ID : 49a0bd91-1aa8-48c4-81f0-564cca166544
 2026-11-18  Kaz Demos  First tracked suite release; preserves prior milestone implementation.
 #>
@@ -75,6 +76,8 @@ function Install-LabDotNet {
     if ([IO.Directory]::Exists($directory)) {
         throw "The managed .NET SDK directory already exists and is unusable: $directory. Rename it or specify -DotNetPath."
     }
+    $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
+    if (-not [IO.File]::Exists($tar)) { throw 'Windows tar.exe is required to unpack the SDK. Alternatively provide an installed x64 .NET 10 SDK with -DotNetPath.' }
     [void] [IO.Directory]::CreateDirectory($parent)
     $stage = Join-Path $parent ('dotnet-stage-' + [guid]::NewGuid().ToString('N'))
     [void] [IO.Directory]::CreateDirectory($stage)
@@ -86,7 +89,9 @@ function Install-LabDotNet {
         if ((Get-FileHash -LiteralPath $archive -Algorithm SHA512).Hash -ine $asset[0].hash) {
             throw 'The downloaded .NET SDK failed SHA-512 verification.'
         }
-        Expand-Archive -LiteralPath $archive -DestinationPath $expanded
+        [void] [IO.Directory]::CreateDirectory($expanded)
+        & $tar -xf $archive -C $expanded
+        if ($LASTEXITCODE -ne 0) { throw "Windows tar could not extract the verified SDK (exit $LASTEXITCODE)." }
         if (-not (Test-LabDotNet (Join-Path $expanded 'dotnet.exe'))) { throw 'The downloaded x64 SDK is unusable.' }
         [IO.Directory]::Move($expanded, $directory)
     } finally {
