@@ -14,6 +14,7 @@ if (args is ["--help"] or [])
     Console.WriteLine("MipSdkAudit <tenant-guid> <client-guid> <test-user-upn> [sit-guid]");
     Console.WriteLine("MipSdkAudit --check-sso <config.json>");
     Console.WriteLine("MipSdkAudit --config <config.json> --audit-log <inventory.jsonl>");
+    Console.WriteLine("MipSdkAudit --policy-catalog <tenant-guid> <delegated-mip-client-guid>");
     Console.WriteLine("MipSdkAudit --list-office-labels <config.json>");
     Console.WriteLine("MipSdkAudit --apply-office-copy <config.json> <source> <output> <label-guid>");
     Console.WriteLine("MipSdkAudit --office-activity-pilot <config.json> <source> <output> <label-guid>");
@@ -27,8 +28,15 @@ bool auditLog = args is ["--config", _, "--audit-log", _];
 bool listOfficeLabels = args is ["--list-office-labels", _];
 bool activityPilot = args is ["--office-activity-pilot", _, _, _, _];
 bool applyOfficeCopy = activityPilot || args is ["--apply-office-copy", _, _, _, _];
-bool silentMode = checkSso || auditLog || listOfficeLabels || applyOfficeCopy;
+bool catalog = args is ["--policy-catalog", _, _];
+bool silentMode = catalog || checkSso || auditLog || listOfficeLabels || applyOfficeCopy;
 Guid tenantId = default, clientId = default, sitId = default;
+if (catalog && (!Guid.TryParse(args[1], out tenantId) || tenantId == Guid.Empty ||
+    !Guid.TryParse(args[2], out clientId) || clientId == Guid.Empty))
+{
+    Console.Error.WriteLine("Provide the tenant and delegated MIP client GUIDs.");
+    return 2;
+}
 if (!selfTest && !silentMode && (args.Length is < 3 or > 4 ||
     !Guid.TryParse(args[0], out tenantId) || tenantId == Guid.Empty ||
     !Guid.TryParse(args[1], out clientId) || clientId == Guid.Empty ||
@@ -51,7 +59,7 @@ LabAuth? auth = null;
 LabConsent? consent = null;
 try
 {
-    AuditSettings? settings = silentMode ? AuditSettings.Read(args[1]) : null;
+    AuditSettings? settings = silentMode && !catalog ? AuditSettings.Read(args[1]) : null;
     stage = "validateOfficeCopy";
     OfficeLabelCopy? officeCopy = applyOfficeCopy
         ? OfficeLabelCopy.Prepare(settings!, args[2], args[3], args[4]) : null;
@@ -73,7 +81,7 @@ try
     string sample = Path.Combine(fixture.FullName, "synthetic.docx");
     string? hashBefore = null;
     DateTime writeTimeBefore = default;
-    if (!silentMode)
+    if (!silentMode || catalog)
     {
         CreateSample(sample);
         hashBefore = HashFile(sample);
@@ -117,7 +125,7 @@ try
         }
         else
         {
-            string? user = settings is null ? args[2] : settings.ExpectedUser;
+            string? user = catalog ? null : settings is null ? args[2] : settings.ExpectedUser;
             auth = new LabAuth(tenantId, clientId, user, silentMode);
             stage = "loadProfile";
             consent = new LabConsent(silentMode);
@@ -171,12 +179,30 @@ try
                 }
                 Emit(new { @event = "auditSummary", candidates = candidates.Count, evaluated = candidates.Count - failed, failed });
             }
-            else if (listOfficeLabels)
+            else if (listOfficeLabels || catalog)
             {
                 stage = "listOfficeLabels";
                 foreach (var label in OfficeLabelCopy.LeafLabels(engine.SensitivityLabels).Where(item => item.IsActive))
                     Emit(new { @event = "officeLabel", labelId = label.Id, name = label.Name,
                         addsProtection = OfficeLabelCopy.AddsProtection(label) });
+                if (catalog)
+                {
+                    stage = "probePolicyRequests";
+                    using var stream = System.IO.File.OpenRead(sample);
+                    var probe = new LabExecutionState(Guid.Empty);
+                    await Classify(engine, stream, sample, "catalogProbe", probe);
+                    var requested = probe.Requests.Select(r => r.ClassificationId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var controls = new[] {
+                        ("Credit card number", "50842eb7-edc8-4019-85dd-5a5c1f2bb085"),
+                        ("ABA routing number", "cb353f78-2b72-4c3c-8827-92ebe4f69fdf"),
+                        ("SWIFT code", "cb2ab58c-9cb8-4c81-baf8-a4e106791df4")
+                    };
+                    Emit(new { @event = "policyCatalog", scope = "currentUserSyntheticDocx",
+                        callbackCalls = probe.CallbackCalls,
+                        controls = controls.Select(c => new { name = c.Item1, sitId = c.Item2,
+                            requestedInProbe = requested.Contains(c.Item2) }),
+                        contentDetectionTested = false });
+                }
             }
             else if (officeCopy is not null)
             {

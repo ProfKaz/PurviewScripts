@@ -122,3 +122,7 @@ El laboratorio comprueba el formato y el estado del original, aplica la etiqueta
 El modo `--audit-log` mantiene su función de auditoría. Los archivos TXT y CSV se pueden analizar para obtener hallazgos. La escritura de M4 se limita a los formatos Office indicados. La protección de texto con MIP puede cambiar la extensión, por ejemplo de `.txt` a `.ptxt`. [Formatos compatibles con MIP File SDK](https://learn.microsoft.com/en-us/information-protection/develop/concept-supported-filetypes)
 
 La prueba sin conexión comprueba el estado del DOCX sintético, las validaciones de rutas, las extensiones y la estructura básica del paquete. La escritura y la comprobación visual en Word, Excel o PowerPoint requieren la prueba autenticada con una etiqueta publicada en el tenant.
+
+### Catálogo del usuario (1.2.0)
+
+Ejecutar con el usuario del piloto: `dotnet MipSdkAudit.dll --policy-catalog <tenant-guid> <delegated-mip-client-guid>`. Utiliza WAM silencioso, enumera etiquetas hoja activas y evalúa un DOCX temporal sin suministrar coincidencias al callback. El evento `policyCatalog` compara los GUID de tarjeta, ABA y SWIFT con las solicitudes observadas en esa evaluación. Un resultado falso significa que ese GUID no apareció en esta prueba. La disponibilidad de un detector de contenido y la asignación de selecciones desde el portal requieren validaciones posteriores.
