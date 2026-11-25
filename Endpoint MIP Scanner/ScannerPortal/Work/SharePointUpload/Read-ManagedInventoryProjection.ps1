@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 1.0.0
+.VERSION 1.1.0
 .GUID 90597121-8cef-4f5a-8319-8dcbc209e048
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+1.1.0 Preserve the scan session identity from the verified managed summary.
 2026-11-23 1.0.0 Validate and aggregate the managed inventory contract.
 #>
 function Read-ManagedInventoryProjection($Directory, $Manifest, [guid]$TenantId, [string]$RegistrationId, [string]$RunId) {
@@ -85,7 +86,18 @@ function Read-ManagedInventoryProjection($Directory, $Manifest, [guid]$TenantId,
             throw "Managed inventory count does not reconcile: $key"
         }
     }
+    $identity = @{}
+    $sourceFields = @{RunComputer='deviceName'; RunAccount='executionAccountName'; RunAccountSid='executionAccountSid'}
+    foreach ($column in $sourceFields.Keys) {
+        $value = $wrapper[$sourceFields[$column]]
+        if ($null -eq $value -or $value -ceq '') { continue }
+        if ($value -isnot [string] -or $value.Length -gt 255 -or $value -match '[\x00-\x1F\x7F]') {
+            throw "Invalid scan identity in $column."
+        }
+        $identity[$column] = $value
+    }
     [ordered]@{
+        RunIdentity=$identity
         Counts=$counts
         ByExtension=@($extensions.Keys | Sort-Object | ForEach-Object { [ordered]@{Extension=$_;Files=$extensions[$_]} })
         ByOutcome=@(if ($counts.InventoriedFiles) { [ordered]@{Outcome='Inventoried';Files=$counts.InventoriedFiles} })

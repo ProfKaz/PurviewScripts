@@ -8,6 +8,7 @@ import { parseAcceptanceIds, parseReport, Report } from './report';
 import { ReportView } from './ReportView';
 import { AgentSettings } from './AgentSettings';
 import { AgentConfigStore } from './agentConfig';
+import { RunAudit } from './RunAudit';
 import { ConfigurationView } from './ConfigurationView';
 import { ConsolidatedView, Cycle } from './ConsolidatedView';
 import styles from './ReportView.module.scss';
@@ -72,6 +73,9 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
         React.createElement(Pivot, { 'aria-label': 'Scanner Portal' },
           React.createElement(PivotItem, { headerText: 'Overview' }, React.createElement(Overview, { load: this.loadOverview })),
           React.createElement(PivotItem, { headerText: 'Batch detail' }, report),
+          React.createElement(PivotItem, { headerText: 'Run audit' }, React.createElement(RunAudit, {
+            client:this.context.spHttpClient, web:this.context.pageContext.web.absoluteUrl, ledger:listId
+          })),
           React.createElement(PivotItem, { headerText: 'Consolidated inventory' },
             React.createElement(ConsolidatedView, { key: listId, load: this.loadCycles })),
           this.agents && React.createElement(PivotItem, { headerText: 'Agent management' }, React.createElement(AgentSettings, {store: this.agents})),

@@ -1,9 +1,10 @@
 <#PSScriptInfo
-.VERSION 0.7.0
+.VERSION 0.8.0
 .GUID 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+0.8.0 Store and verify endpoint-reported Windows identity on managed acceptance rows.
 0.7.0 Allow the discovery worker to reuse its authenticated site connection.
 0.6.0 Refresh the configured overview following verified report storage or reuse.
 2026-11-23 0.5.0 Validate and project managed inventory runs separately from Purview SIT reports.
@@ -15,7 +16,7 @@
 .DESCRIPTION
 Downloads and validates a sealed batch with existing Setup identity and PS5.1 contract. Optional central acceptance add/readback; no endpoint outbox access.
 .NOTES
-Version     : 0.7.0
+Version     : 0.8.0
 Tracking ID : 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 #>
 #Requires -Version 7.4
@@ -216,13 +217,28 @@ try{
    $item=Get-PnPListItem -List $AcceptanceListId -Id $central.AcceptanceItemId -Connection $connection
    if($item['Title'] -cne $central.AcceptanceKey -or $item['ManifestSha256'] -cne $actual){throw 'Acceptance changed before report storage.'}
    $stored=[string]$item[$column]
-   $changed=-not $stored
+   if ($stored -and $stored -cne $summaryJson) { throw 'Stored report differs from validated summary.' }
+   $updates=@{}
+   if (!$stored) { $updates[$column]=$summaryJson }
+   if ($ManagedInventory) {
+    foreach ($key in $managed.RunIdentity.Keys) {
+     $prior=[string]$item[$key]
+     if (!$prior) { $updates[$key]=$managed.RunIdentity[$key] }
+     elseif ($prior -cne $managed.RunIdentity[$key]) { throw "Stored $key differs from the verified scan summary." }
+    }
+   }
+   $changed=$updates.Count -gt 0
    if($changed){
-    $null=Set-PnPListItem -List $AcceptanceListId -Identity $central.AcceptanceItemId -Values @{PortalReportJson=$summaryJson} -Connection $connection
+    $null=Set-PnPListItem -List $AcceptanceListId -Identity $central.AcceptanceItemId -Values $updates -Connection $connection
     $item=Get-PnPListItem -List $AcceptanceListId -Id $central.AcceptanceItemId -Connection $connection
     $stored=[string]$item[$column]
    }
    if($stored -cne $summaryJson -or $item['Title'] -cne $central.AcceptanceKey -or $item['ManifestSha256'] -cne $actual){throw 'Stored report differs from validated summary or acceptance binding.'}
+   if ($ManagedInventory) {
+    foreach ($key in $managed.RunIdentity.Keys) {
+     if ($item[$key] -cne $managed.RunIdentity[$key]) { throw "Failed to verify $key on acceptance readback." }
+    }
+   }
    $report.Test=if($ManagedInventory){'ManagedInventory-PortalIngestion'}else{'W06D-StoreAcceptedBatchReport'}
    $report.Outcome=if($changed){'Stored'}else{'Reused'}
    $report.SharePointChanged=($changed -or $central.AcceptanceCreatedThisRun -or $central.CreateResponseUncertain)

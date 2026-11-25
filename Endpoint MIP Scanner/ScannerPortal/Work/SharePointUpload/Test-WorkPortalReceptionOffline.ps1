@@ -1,15 +1,16 @@
 <#PSScriptInfo
-.VERSION 0.4.0
+.VERSION 0.5.0
 .GUID d8a2a089-3acf-437a-972a-621e62bc2fd6
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+0.5.0 Test scan identity storage, conflicting values and enrichment during revalidation.
 2026-11-21 0.2.0 Central acceptance lost-response/repeat, conflict and unsafe ACL tests.
 2026-11-21 0.1.0 Mock PnP transport, real Windows PowerShell contract verifier, repeat and corruption tests.
 #>
 <#
 .NOTES
-Version     : 0.4.0
+Version     : 0.5.0
 Tracking ID : d8a2a089-3acf-437a-972a-621e62bc2fd6
 #>
 #Requires -Version 7.4
@@ -42,7 +43,7 @@ function Add-PnPField{param($List,$DisplayName,$InternalName,$Type,$Connection)
  $global:ReceiverFixture.ReportField=@{InternalName=$InternalName;TypeAsString=$Type;RichText=$false;AppendOnly=$false}
 }
 function Set-PnPListItem{param($List,$Identity,$Values,$Connection)
- $global:ReceiverFixture.Item.PortalReportJson=$Values.PortalReportJson
+ foreach ($fieldName in $Values.Keys) { $global:ReceiverFixture.Item[$fieldName]=$Values[$fieldName] }
  $global:ReceiverFixture.ReportWrites++
 }
 function Get-PnPListItem{param($List,$Query,$Id,$Connection) if($global:ReceiverFixture.Item){$global:ReceiverFixture.Item}}
@@ -124,7 +125,8 @@ try{
  $managedSummary=@{event='summary';runId=$runId;inventoried=1;errors=0;generationComplete=$true}
  $events=@(@{event='file';extension='.txt';path='C:\synthetic.txt'},$managedSummary)
  $events | ForEach-Object { $_ | ConvertTo-Json -Compress } | Set-Content (Join-Path $fixture 'records.jsonl') -Encoding utf8
- @{schemaVersion=1;source='LocalMIPScanner.WinPS51';tenantId=$common.TenantId.ToString();registrationId=$registrationId;summary=$managedSummary} |
+ @{schemaVersion=1;source='LocalMIPScanner.WinPS51';tenantId=$common.TenantId.ToString();registrationId=$registrationId;summary=$managedSummary
+   deviceName='LAB-01';executionAccountName='LAB\AuditedUser';executionAccountSid='S-1-5-21-123-456-789-1001'} |
     ConvertTo-Json | Set-Content (Join-Path $fixture 'summary.json') -Encoding utf8
  $files=@(foreach($name in 'records.jsonl','summary.json') {
     $file=Get-Item (Join-Path $fixture $name)
@@ -135,6 +137,12 @@ try{
  $common.ExpectedManifestSha256=(Get-FileHash (Join-Path $fixture 'manifest.json')).Hash
  $managed=& $scriptPath @common
  $repeatManaged=& $scriptPath @common
+ Assert ($global:ReceiverFixture.Item.RunComputer -ceq 'LAB-01' -and $global:ReceiverFixture.Item.RunAccount -ceq 'LAB\AuditedUser' -and
+    $global:ReceiverFixture.Item.RunAccountSid -ceq 'S-1-5-21-123-456-789-1001') 'Scan identity readback failed.'
+ $global:ReceiverFixture.Item.RunAccount='different'
+ $rejected=$false;try{& $scriptPath @common|Out-Null}catch{$rejected=$true}
+ Assert $rejected 'Conflicting execution identity accepted.'
+ $global:ReceiverFixture.Item.RunAccount='LAB\AuditedUser'
  Assert ($managed.Outcome -eq 'Stored' -and $managed.ManagedInventory.AnalyzedFiles -eq 0 -and
     -not $managed.ManagedInventory.AuditEnabled -and $managed.ByExtension[0].Files -eq 1 -and
     $repeatManaged.Outcome -eq 'Reused' -and $global:ReceiverFixture.Creates -eq 2 -and
@@ -142,6 +150,11 @@ try{
  $global:ReceiverFixture.BadDownload=$true
  $rejected=$false;try{& $scriptPath @common|Out-Null}catch{$rejected=$true}
  Assert ($rejected -and $global:ReceiverFixture.ReportWrites -eq 2) 'Corrupted managed inventory accepted.'
+ $global:ReceiverFixture.BadDownload=$false
+ $global:ReceiverFixture.Item.Remove('RunAccount')
+ $enriched=& $scriptPath @common
+ Assert ($enriched.Outcome -eq 'Stored' -and $global:ReceiverFixture.Item.RunAccount -ceq 'LAB\AuditedUser' -and
+    $enriched.ReportSha256 -ceq $managed.ReportSha256) 'Revalidation should fill missing audit metadata without changing the report hash.'
  'PASS: managed inventory payloads, disabled audit, aggregate projection and idempotent publication'
 
  'PASS: mocked PnP download; actual PS5.1 identity/payload/summary verification; local dedup, corruption/hash rejection and cleanup; mocked acceptance create/readback, lost-response recovery, dedup, conflict and unsafe ACL rejection'
