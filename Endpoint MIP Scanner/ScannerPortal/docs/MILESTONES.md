@@ -17,6 +17,10 @@ Cada milestone se cierra por evidencia de aceptación, no por porcentaje de arch
 
 ## Consola de gobierno de datos
 
+**Rescan desde Agent management (0.10.0.0).** Prueba validada en SPO el 25 de noviembre de 2026. El portal mostró la generación `d5584ec5601142ffae5425cbbc4ad940` en progreso con la aceptación 282 y luego `Completed with errors` con las aceptaciones 282 y 283.
+
+- [ ] **SP1/SP4 · Usuario y equipo por ejecución.** Incorporar al reporte central los valores que el agente ya envía en `summary.json`: nombre del equipo (`deviceName`), cuenta de Windows que ejecutó el escaneo (`executionAccountName`) y SID (`executionAccountSid`). Conservar los valores observados en cada ciclo junto al registro y al RunId. Verificar que un auditor autorizado pueda recuperar una aceptación por usuario o equipo, ver los valores que coinciden con el resumen verificado y distinguir la cuenta de ejecución del operador que solicitó el rescan. Mostrar como desconocidos los campos ausentes en lotes históricos.
+
 El piloto confirmó la recepción del ítem 118 y la publicación del resumen de 117 ejecuciones. La tarea de arranque del host administrativo está implementada y pendiente de validación en el tenant. Ver [instalación y prueba de reinicio](RECEIVER-HOST.md).
 
 Referencia visual para la fase posterior: navegación lateral en inglés, resumen ejecutivo, filtros, cobertura, tendencias de clasificación, prioridades y tabla operativa del mockup Designer. Cada indicador debe usar datos medidos y fecha de corte.
