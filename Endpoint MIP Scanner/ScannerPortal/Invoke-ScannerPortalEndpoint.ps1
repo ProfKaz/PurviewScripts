@@ -1,16 +1,17 @@
 ﻿<#PSScriptInfo
-.VERSION 1.0.0
+.VERSION 1.1.0
 .GUID cb3e6ef2-d589-4383-88f9-883caa438eaf
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-25 1.1.0 Report fleet contact independently of scan findings.
 2026-11-20 1.0.0 Pull configuration, bounded scan, durable report and verified upload.
 #>
 <#
 .DESCRIPTION
 Managed endpoint pilot. Audit-only; no document labeling. Continuous mode polls between bounded scan cycles.
 .NOTES
-Version     : 1.0.0
+Version     : 1.1.0
 Tracking ID : cb3e6ef2-d589-4383-88f9-883caa438eaf
 #>
 #Requires -Version 5.1
@@ -26,7 +27,7 @@ Assert-PortalBootstrap $registration.bootstrap
 $lock=[IO.File]::Open((Join-Path $Directory 'runtime.lock'),'OpenOrCreate','ReadWrite','None')
 try {
     do {
-        $token=$null; $idle=60; $status=[ordered]@{event='managedEndpoint';startedUtc=[datetime]::UtcNow.ToString('o');registrationId=$registration.registrationId}
+        $token=$null; $profile=$null; $idle=60; $status=[ordered]@{event='managedEndpoint';startedUtc=[datetime]::UtcNow.ToString('o');registrationId=$registration.registrationId}
         try {
             try {
                 $token=Get-PortalToken $registration
@@ -63,7 +64,18 @@ try {
             } else { $status.scanState=if ($SyncOnly) {'SyncOnly'} else {'Paused'} }
             $status.outcome='Completed'
         } catch { $status.outcome='Failed';$status.error=$_.Exception.Message }
-        finally { $token=$null }
+        finally {
+            if ($token -and $profile -and -not $SyncOnly) {
+                try {
+                    $mode = if ($status.outcome -eq 'Failed') {'Failed'} elseif ($profile.Profile.execution.paused) {'Paused'} else {'Active'}
+                    $status.heartbeat = Send-PortalHeartbeat $registration $token $profile $Directory $mode
+                } catch {
+                    $status.heartbeat = 'Failed'
+                    $status.heartbeatError = $_.Exception.GetType().Name
+                }
+            }
+            $token=$null
+        }
         Write-PortalJson $status (Join-Path $Directory 'last-status.json')
         Write-Host '=== ENDPOINT PORTAL PARA COMPARTIR ===' -ForegroundColor Magenta
         Write-Host ($status|ConvertTo-Json -Depth 6) -ForegroundColor Magenta

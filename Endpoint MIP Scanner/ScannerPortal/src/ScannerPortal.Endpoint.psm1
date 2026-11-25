@@ -1,9 +1,10 @@
 <#PSScriptInfo
-.VERSION 1.0.1
+.VERSION 1.1.0
 .GUID a0bd04b9-f8bf-44bf-93d2-de2a27099420
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+2026-11-25 1.1.0 Report fleet contact independently of scan findings.
 2026-11-23 1.0.1 Managed checkpoint resumption across cycle log directories.
 2026-11-20 1.0.0 Certificate enrollment, validated pull profiles and verified report delivery.
 #>
@@ -11,7 +12,7 @@
 .DESCRIPTION
 PS5.1 endpoint control-plane pilot. Application identity is shared, not per-device authorization.
 .NOTES
-Version     : 1.0.1
+Version     : 1.1.0
 Tracking ID : a0bd04b9-f8bf-44bf-93d2-de2a27099420
 #>
 #Requires -Version 5.1
@@ -317,5 +318,43 @@ function Send-PortalBatch($Registration, [string]$Token, [string]$BatchDirectory
     [IO.Directory]::Move($BatchDirectory,(Join-Path $sent $manifest.batchId))
     [pscustomobject]@{ BatchId=$manifest.batchId; DeliveryState='UploadedVerified'; AcceptedByCentralProcessor=$false }
 }
+function Send-PortalHeartbeat($Registration, [string]$Token, $Profile, [string]$Directory, [string]$State) {
+    $id = ([guid]$Registration.registrationId).ToString('D')
+    $drive = $Registration.bootstrap.landingDriveId
+    $suiteVersion = $null
+    $installPath = Join-Path $script:Suite '.endpoint-install/status.json'
+    if ([IO.File]::Exists($installPath)) {
+        $install = Read-PortalJson $installPath
+        if ($install.Status -eq 'Completed' -and $install.Stage -eq 'EndpointInstall') { $suiteVersion = $install.SuiteVersion }
+    }
+    $signal = [ordered]@{
+        contract = 'ScannerPortal.Heartbeat/1'
+        registrationId = $id
+        computer = [Environment]::MachineName
+        suiteVersion = $suiteVersion
+        profileId = $Profile.Profile.profileId
+        profileVersion = $Profile.Profile.version
+        state = $State
+    }
+    $json = ConvertTo-Json -InputObject $signal -Compress
+    $bytes = [Text.Encoding]::UTF8.GetBytes($json)
+    $hash = Get-WinPSSha256 $bytes
+    $cachePath = Join-Path $Directory 'last-heartbeat.json'
+    if ([IO.File]::Exists($cachePath)) {
+        try {
+            $previous = Read-PortalJson $cachePath
+            $age = [datetimeoffset]::UtcNow - [datetimeoffset]::Parse($previous.sentUtc)
+            if ($previous.driveId -eq $drive -and $previous.sha256 -eq $hash -and $age.TotalHours -ge 0 -and $age.TotalHours -lt 4) { return 'Current' }
+        } catch { Write-Verbose 'The heartbeat receipt will be refreshed.' }
+    }
+    $root = Invoke-PublisherGraph -Token $Token -Uri "https://graph.microsoft.com/v1.0/drives/$drive/root"
+    $folder = Get-OrCreatePublisherFolder $Token $drive $root.id 'heartbeats'
+    $uri = "https://graph.microsoft.com/v1.0/drives/$drive/items/$($folder.id):/$id.json:/content"
+    $item = Invoke-PublisherGraph -Token $Token -Uri $uri -Method PUT -Bytes $bytes
+    if ($item.name -ine "$id.json" -or $item.size -ne $bytes.Length) { throw 'Heartbeat write was not acknowledged.' }
+    Write-PortalJson @{driveId=$drive;sha256=$hash;sentUtc=[datetimeoffset]::UtcNow.ToString('o')} $cachePath
+    return 'Sent'
+}
+
 function Get-PortalHttpStatus($ErrorRecord) { Get-PublisherHttpStatus $ErrorRecord }
-Export-ModuleMember -Function New-PortalEnrollment,Test-PortalProfile,Sync-PortalProfile,Get-PortalCachedProfile,Get-PortalToken,New-PortalRunBatch,Send-PortalBatch,Read-PortalJson,Write-PortalJson,Assert-PortalBootstrap,Assert-PortalDirectory,Get-PortalHttpStatus,Get-PortalScanParameters,Restore-PortalRunBatches
+Export-ModuleMember -Function Send-PortalHeartbeat,New-PortalEnrollment,Test-PortalProfile,Sync-PortalProfile,Get-PortalCachedProfile,Get-PortalToken,New-PortalRunBatch,Send-PortalBatch,Read-PortalJson,Write-PortalJson,Assert-PortalBootstrap,Assert-PortalDirectory,Get-PortalHttpStatus,Get-PortalScanParameters,Restore-PortalRunBatches

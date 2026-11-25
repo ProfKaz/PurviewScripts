@@ -8,6 +8,7 @@ import { parseAcceptanceIds, parseReport, Report } from './report';
 import { ReportView } from './ReportView';
 import { AgentSettings } from './AgentSettings';
 import { AgentConfigStore } from './agentConfig';
+import { FleetCoverage } from './FleetCoverage';
 import { RunAudit } from './RunAudit';
 import { ConfigurationView } from './ConfigurationView';
 import { ConsolidatedView, Cycle } from './ConsolidatedView';
@@ -72,6 +73,7 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
     this.root?.render(React.createElement(React.Fragment, null,
         React.createElement(Pivot, { 'aria-label': 'Scanner Portal' },
           React.createElement(PivotItem, { headerText: 'Overview' }, React.createElement(Overview, { load: this.loadOverview })),
+          React.createElement(PivotItem, { headerText: 'Fleet coverage' }, React.createElement(FleetCoverage, { client: this.context.spHttpClient, web: this.context.pageContext.web.absoluteUrl, relative: this.context.pageContext.web.serverRelativeUrl })),
           React.createElement(PivotItem, { headerText: 'Batch detail' }, report),
           React.createElement(PivotItem, { headerText: 'Run audit' }, React.createElement(RunAudit, {
             client:this.context.spHttpClient, web:this.context.pageContext.web.absoluteUrl, ledger:listId
