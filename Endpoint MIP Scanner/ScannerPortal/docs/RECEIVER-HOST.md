@@ -8,6 +8,8 @@ Setup prints the task name and health file path. A startup trigger and a repeati
 
 ## Acceptance
 
+For run audit (web part 0.11), run the report installer on this host with `-UpdateReceiverHost` in elevated PowerShell. It provisions three indexed text fields on the existing acceptance ledger and updates the pinned receiver scripts. The existing application, certificate, task and discovery checkpoint continue to serve the same site. A newly received managed run populates computer, execution account and SID from its verified summary. Existing ledger rows can show Unknown. Reprocessing a verified batch can fill its missing values. Conflicting stored identity values fail verification.
+
 1. Read `status.json` as an administrator. Verify `identity = S-1-5-19`, the expected client ID, a recent finish time and `outcome = Completed`. A pending batch gives `PendingRetry`. A startup or permissions error can appear in task history or in the status file. Inspect the task's LastTaskResult and last run time if no fresh status is available.
 2. Confirm a new batch reaches acceptance and the executive overview with the interactive watcher stopped.
 3. At an approved maintenance time, restart the host. Compare the pass start timestamp with the host boot time. Verify that the scheduled task ran without an interactive sign-in, reused its checkpoint, and completed another pass.

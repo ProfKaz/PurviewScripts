@@ -25,6 +25,7 @@ param(
     [Parameter(Mandatory,ParameterSetName='Install')][guid]$TenantId,
     [Parameter(Mandatory,ParameterSetName='Install')][guid]$PortalClientId,
     [Parameter(ParameterSetName='Install')][switch]$EnableDynamicOverview,
+    [Parameter(ParameterSetName='Install')][switch]$UpdateReceiverHost,
     [Parameter(ParameterSetName='Install')][string[]]$ExcludeBatchId,
     [Parameter(Mandatory,ParameterSetName='Download')][switch]$DownloadOnly,
     [string]$PackageDirectory = (Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner/PortalPackages')
@@ -37,6 +38,10 @@ $productId = [guid]'5670f3cc-719f-44e2-a809-b9ddd68f674a'
 $expectedHash = '5D33F78EA3F874C07A11AF25A0A322BC701B87AB11E5A948E439C0874690496E'
 $url = 'https://raw.githubusercontent.com/ProfKaz/PurviewScripts/8eb345f3517fe69bf16c41b38edd7fc9ede1d177/Endpoint%20MIP%20Scanner/ScannerPortal/ui/packages/scanner-report-0.11.0.sppkg'
 if (-not $DownloadOnly) {
+    if ($UpdateReceiverHost -and (!$IsWindows -or ![Environment]::Is64BitProcess -or
+        !([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
+        throw 'Run UpdateReceiverHost in elevated x64 PowerShell on the installed receiver host.'
+    }
     if ($TenantId -eq [guid]::Empty -or $PortalClientId -eq [guid]::Empty -or
         $SiteUrl.Scheme -ne 'https' -or $SiteUrl.Host -notmatch '^[a-z0-9-]+\.sharepoint\.com$' -or
         $SiteUrl.AbsolutePath -notmatch '^/sites/[A-Za-z0-9_-]+/?$' -or
@@ -78,7 +83,8 @@ if (-not $DownloadOnly) {
         foreach ($name in $labels.Keys) {
             $field = $fields | Where-Object InternalName -ceq $name
             if (!$field) {
-                $field = Add-PnPField -List $ledger.Id -InternalName $name -DisplayName $labels[$name] -Type Text -Connection $connection
+                $null = Add-PnPField -List $ledger.Id -InternalName $name -DisplayName $labels[$name] -Type Text -Connection $connection
+                $field = Get-PnPField -List $ledger.Id -Identity $name -Connection $connection
             }
             if ($field.TypeAsString -ne 'Text') { throw "Unexpected type for audit column $name." }
             if (!(Get-PnPProperty -ClientObject $field -Property Indexed -Connection $connection)) {
@@ -175,6 +181,19 @@ if (-not $DownloadOnly) {
         }
     } finally {
         Disconnect-PnPOnline -ErrorAction SilentlyContinue
+    }
+}
+if ($UpdateReceiverHost) {
+    $receiverRoot = Join-Path $env:ProgramFiles 'Endpoint MIP Scanner Receiver'
+    if (!(Test-Path -LiteralPath $receiverRoot -PathType Container)) {throw 'Run UpdateReceiverHost on the installed receiver host.'}
+    $updater = Join-Path $receiverRoot ('receiver-' + [guid]::NewGuid().ToString('N') + '.ps1')
+    try {
+        Invoke-WebRequest 'https://raw.githubusercontent.com/ProfKaz/PurviewScripts/76a88f17b78b4b1d461228e330bc059451239d45/Endpoint%20MIP%20Scanner/ScannerPortal/deployment/Install-ScannerPortalReceiverTask.ps1' -OutFile $updater
+        if ((Get-FileHash -LiteralPath $updater).Hash -ne '7AE76FF87E63D00023F0C5703B25FAAB95009D644CC2103E799188765494EB2F') {throw 'Receiver updater checksum mismatch.'}
+        Unblock-File -LiteralPath $updater
+        $result.Receiver = & $updater -TenantId $TenantId -SiteUrl $SiteUrl -UpdateOnly
+    } finally {
+        if ([IO.File]::Exists($updater)) {[IO.File]::Delete($updater)}
     }
 }
 Write-Host '=== WORK W07B INSTALLATION FOR SHARING ===' -ForegroundColor Magenta
