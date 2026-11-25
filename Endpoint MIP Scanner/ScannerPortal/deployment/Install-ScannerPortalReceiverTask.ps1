@@ -1,19 +1,21 @@
 <#PSScriptInfo
-.VERSION 0.1.1
+.VERSION 0.2.0
 .GUID a3efe777-a548-4386-bdbb-f6626e8d512f
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.2.0 Support code-only updates and verified scan identity projection.
 0.1.1 Resolve PnP.PowerShell in an isolated machine runtime and stage the package when missing.
 0.1.0 Provision a site-scoped receiver application, machine certificate and recurring startup task.
 #>
 #Requires -Version 7.4
 #Requires -RunAsAdministrator
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName='Setup')]
 param([Parameter(Mandatory)][guid]$TenantId,[Parameter(Mandatory)][uri]$SiteUrl,
-    [Parameter(Mandatory)][switch]$GrantReceiverSiteFullControl,
-    [Parameter(Mandatory)][switch]$AcknowledgePublisherDenied)
+    [Parameter(Mandatory,ParameterSetName='Setup')][switch]$GrantReceiverSiteFullControl,
+    [Parameter(Mandatory,ParameterSetName='Setup')][switch]$AcknowledgePublisherDenied,
+    [Parameter(Mandatory,ParameterSetName='Update')][switch]$UpdateOnly)
 $ErrorActionPreference='Stop'
-if (!$IsWindows -or ![Environment]::Is64BitProcess -or !$GrantReceiverSiteFullControl -or !$AcknowledgePublisherDenied -or
+if (!$IsWindows -or ![Environment]::Is64BitProcess -or (!$UpdateOnly -and (!$GrantReceiverSiteFullControl -or !$AcknowledgePublisherDenied)) -or
     $TenantId -eq [guid]::Empty -or $SiteUrl.Scheme -ne 'https' -or $SiteUrl.Host -notmatch '^[a-z0-9-]+\.sharepoint\.com$' -or
     $SiteUrl.AbsolutePath -notmatch '^/sites/[a-z0-9_-]+/?$' -or $SiteUrl.Query -or $SiteUrl.Fragment -or $SiteUrl.UserInfo -or !$SiteUrl.IsDefaultPort) {
     throw 'Use elevated x64 PowerShell on the administrative host and specify the dedicated pilot site and both acknowledgments.'
@@ -28,10 +30,15 @@ if ($LASTEXITCODE -ne 0 -or [version]$runtime -lt [version]'7.4.6') {throw 'The 
 $taskName="ScannerPortal-Receiver-$tag"
 $description="Endpoint MIP Scanner receiver for $site ($TenantId)"
 $task=Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-if ($task -and ($task.Description -ne $description -or $task.State -eq 'Running')) {throw 'A different or running task occupies this name. Retry between passes.'}
+if ($task -and ($task.Description -ne $description -or (!$UpdateOnly -and $task.State -eq 'Running'))) {throw 'A different or running task occupies this name. Retry between passes.'}
 $service=[Security.Principal.SecurityIdentifier]::new('S-1-5-19')
 $state=Join-Path $base 'state'
 $metadata=Join-Path $base 'receiver.json'
+if ($UpdateOnly) {
+    if (!$task -or !(Test-Path -LiteralPath $metadata -PathType Leaf)) {throw 'Run UpdateOnly on the existing receiver host.'}
+    $saved=Get-Content -LiteralPath $metadata -Raw | ConvertFrom-Json
+    if ($saved.siteUrl -ne $site -or $saved.tenantId -ne "$TenantId") {throw 'Saved receiver differs from the requested site or tenant.'}
+}
 function Write-AtomicJson($path,$value) {
     [IO.File]::WriteAllText("$path.new",($value|ConvertTo-Json -Depth 5))
     [IO.File]::Move("$path.new",$path,$true)
@@ -41,14 +48,14 @@ function Write-AtomicJson($path,$value) {
 [void][IO.Directory]::CreateDirectory($base)
 $setupLock=[IO.File]::Open((Join-Path $base 'setup.lock'),'OpenOrCreate','ReadWrite','None')
 try {
-    $files=@{
+    $files=[ordered]@{
         'Work/SharePointUpload/Start-ScannerPortalReceiver.ps1'='436709931086e3e53c0d193c76590c939f08dca7'
-        'Work/SharePointUpload/Test-WorkPortalReception.ps1'='0533fc009ffc26802ba5d45f157de5a6fe41aa10'
-        'Work/SharePointUpload/Read-ManagedInventoryProjection.ps1'='80d7a36bf2498a2d1af5fffd8328c0d8963d5658'
+        'Work/SharePointUpload/Read-ManagedInventoryProjection.ps1'='a06866e32d909aec43e85599ba69ef14f3dc042d'
+        'Work/SharePointUpload/Test-WorkPortalReception.ps1'='4c7f47a312ab7381029d51aaecedf291baa39927'
         'deployment/Publish-ScannerPortalOverview.ps1'='f8cbb9f5697f82efae98fa1733cc58ff02d6c9a2'
         'deployment/Invoke-ScannerPortalReceiverTask.ps1'='f377e5d4baf3dd60467645eb826eec7aa642a2c6'
     }
-    $release='https://raw.githubusercontent.com/ProfKaz/PurviewScripts/d3e4a5062eb81752cfd1faeb0f971c8fa5530c80/Endpoint%20MIP%20Scanner/ScannerPortal'
+    $release='https://raw.githubusercontent.com/ProfKaz/PurviewScripts/8eb345f3517fe69bf16c41b38edd7fc9ede1d177/Endpoint%20MIP%20Scanner/ScannerPortal'
     foreach ($relative in $files.Keys) {
         $target=Join-Path $base $relative
         [void][IO.Directory]::CreateDirectory((Split-Path $target))
@@ -58,7 +65,14 @@ try {
         $hash=[Convert]::ToHexString([Security.Cryptography.SHA1]::HashData([byte[]]($header+$bytes)))
         if ($hash -ine $files[$relative]) {throw "Download integrity check failed for $relative."}
         Unblock-File -LiteralPath "$target.new"
+    }
+    foreach ($relative in $files.Keys) {
+        $target=Join-Path $base $relative
         [IO.File]::Move("$target.new",$target,$true)
+    }
+    if ($UpdateOnly) {
+        [pscustomobject]@{Outcome='ReceiverCodeUpdated';TaskName=$taskName;Site=$site;StatusPath=(Join-Path $state 'status.json')}
+        return
     }
     [void][IO.Directory]::CreateDirectory($state)
     $acl=[Security.AccessControl.DirectorySecurity]::new()

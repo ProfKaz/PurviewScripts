@@ -6,7 +6,7 @@
   "Scripts": [
     {
       "Path": "ScannerPortal/deployment/Install-ScannerPortalReceiverTask.ps1",
-      "Version": "0.1.1",
+      "Version": "0.2.0",
       "TrackingId": "a3efe777-a548-4386-bdbb-f6626e8d512f"
     },
     {
@@ -366,17 +366,17 @@
     },
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Read-ManagedInventoryProjection.ps1",
-      "Version": "1.0.0",
+      "Version": "1.1.0",
       "TrackingId": "90597121-8cef-4f5a-8319-8dcbc209e048"
     },
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkPortalReception.ps1",
-      "Version": "0.7.0",
+      "Version": "0.8.0",
       "TrackingId": "9db4ac4a-f2e7-4fd6-9413-1557d38fb74f"
     },
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkPortalReceptionOffline.ps1",
-      "Version": "0.4.0",
+      "Version": "0.5.0",
       "TrackingId": "d8a2a089-3acf-437a-972a-621e62bc2fd6"
     },
     {
@@ -396,7 +396,7 @@
     },
     {
       "Path": "ScannerPortal/deployment/Install-ScannerPortalReport.ps1",
-      "Version": "0.10.0",
+      "Version": "0.11.0",
       "TrackingId": "7bb7b04d-f2b8-4d7d-8840-ec9a8972352b"
     },
     {
