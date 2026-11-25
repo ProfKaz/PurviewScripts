@@ -14,6 +14,7 @@ if (args is ["--help"] or [])
     Console.WriteLine("MipSdkAudit <tenant-guid> <client-guid> <test-user-upn> [sit-guid]");
     Console.WriteLine("MipSdkAudit --check-sso <config.json>");
     Console.WriteLine("MipSdkAudit --config <config.json> --audit-log <inventory.jsonl>");
+    Console.WriteLine("MipSdkAudit --policy-labels-only <tenant-guid> <delegated-mip-client-guid>");
     Console.WriteLine("MipSdkAudit --policy-catalog <tenant-guid> <delegated-mip-client-guid>");
     Console.WriteLine("MipSdkAudit --list-office-labels <config.json>");
     Console.WriteLine("MipSdkAudit --apply-office-copy <config.json> <source> <output> <label-guid>");
@@ -28,7 +29,8 @@ bool auditLog = args is ["--config", _, "--audit-log", _];
 bool listOfficeLabels = args is ["--list-office-labels", _];
 bool activityPilot = args is ["--office-activity-pilot", _, _, _, _];
 bool applyOfficeCopy = activityPilot || args is ["--apply-office-copy", _, _, _, _];
-bool catalog = args is ["--policy-catalog", _, _];
+bool labelsOnlyProbe = args is ["--policy-labels-only", _, _];
+bool catalog = labelsOnlyProbe || args is ["--policy-catalog", _, _];
 bool silentMode = catalog || checkSso || auditLog || listOfficeLabels || applyOfficeCopy;
 Guid tenantId = default, clientId = default, sitId = default;
 if (catalog && (!Guid.TryParse(args[1], out tenantId) || tenantId == Guid.Empty ||
@@ -144,7 +146,7 @@ try
                 Guid.NewGuid().ToString(), auth, "LocalMIPScanner lab", "en-US")
             {
                 Identity = new Identity(user!),
-                LoadSensitivityTypes = true
+                LoadSensitivityTypes = !labelsOnlyProbe
             });
             Emit(new
             {
@@ -185,7 +187,7 @@ try
                 foreach (var label in OfficeLabelCopy.LeafLabels(engine.SensitivityLabels).Where(item => item.IsActive))
                     Emit(new { @event = "officeLabel", labelId = label.Id, name = label.Name,
                         addsProtection = OfficeLabelCopy.AddsProtection(label) });
-                if (catalog)
+                if (catalog && !labelsOnlyProbe)
                 {
                     stage = "probePolicyRequests";
                     using var stream = System.IO.File.OpenRead(sample);
@@ -253,11 +255,14 @@ try
 }
 catch (Exception error)
 {
+    var network = error.GetBaseException() as Microsoft.InformationProtection.Exceptions.NetworkException;
     // Keep exception messages, claims, access tokens and UPNs out of the report.
     Emit(new
     {
         @event = "error", stage, type = error.GetBaseException().GetType().Name,
         reason = error is AuditInputException ? error.Message : null,
+        networkCategory = network?.Category.ToString(),
+        responseStatusCode = network?.ResponseStatusCode,
         authError = auth?.ErrorCode,
         sdkConsentRequired = consent?.DeniedForSilentMode ?? false
     });
