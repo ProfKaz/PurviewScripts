@@ -6,6 +6,8 @@ import { IPropertyPaneConfiguration, PropertyPaneTextField } from '@microsoft/sp
 import { Dropdown, IDropdownOption, Pivot, PivotItem } from '@fluentui/react';
 import { parseAcceptanceIds, parseReport, Report } from './report';
 import { ReportView } from './ReportView';
+import { AgentSettings } from './AgentSettings';
+import { AgentConfigStore } from './agentConfig';
 import { ConfigurationView } from './ConfigurationView';
 import { ConsolidatedView, Cycle } from './ConsolidatedView';
 import styles from './ReportView.module.scss';
@@ -22,6 +24,7 @@ const date = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short',
 
 export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportProperties> {
   private root?: Root;
+  private agents?: AgentConfigStore;
   private request = 0;
   private configuration = 0;
   private options: IDropdownOption[] = [];
@@ -31,6 +34,7 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
 
   public render(): void {
     this.root ??= createRoot(this.domElement);
+    this.agents = new AgentConfigStore(this.context.spHttpClient, this.context.pageContext.web.absoluteUrl, this.context.pageContext.web.serverRelativeUrl, this.properties.acceptanceListId);
     const configuration = ++this.configuration;
     this.request++;
     this.options = [];
@@ -70,6 +74,7 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
           React.createElement(PivotItem, { headerText: 'Batch detail' }, report),
           React.createElement(PivotItem, { headerText: 'Consolidated inventory' },
             React.createElement(ConsolidatedView, { key: listId, load: this.loadCycles })),
+          this.agents && React.createElement(PivotItem, { headerText: 'Agent management' }, React.createElement(AgentSettings, {store: this.agents})),
           path && React.createElement(PivotItem, { headerText: 'Configuration' },
             React.createElement(ConfigurationView, { key: path, path, load: this.loadProfile }))),
         React.createElement('footer', { className: styles.brand },

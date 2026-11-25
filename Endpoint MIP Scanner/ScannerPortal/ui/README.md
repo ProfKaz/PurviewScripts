@@ -1,10 +1,16 @@
 # Interactive portal report (W07B)
 
 The portal uses English for navigation, labels, formatting, and messages.
-This read-only web part uses SPFx 1.24.1, React 18.3.1, and Fluent UI.
+This web part uses SPFx 1.24.1, React 18.3.1, and Fluent UI.
 It reads the acceptance list in the current site through the signed-in
 SharePoint session. The package includes its client assets and requests no
 additional API permissions.
+
+### Agent management (0.10.0.0)
+
+Select an existing registration in **Agent management**. The editor reads its assigned revision and verifies the SHA-256. Edit its scan roots, extensions, exclusions, local detection rules, incremental and performance settings, pause state, schedule and expiration. The signed-in operator needs add and edit rights on ScannerPortalConfig. SharePoint enforces access on every request. Local content rules use .NET regular expressions and the WinPS 5.1 endpoint validates them at sync.
+
+**Publish configuration** writes a new revision and conditionally updates that registration using its assignment ETag. After a conflict, reload and review the current revision. **Request full rescan** publishes the displayed settings with a new local index directory. The next agent sync picks up the assignment. **Check rescan progress** on the requested revision reads accepted runs for the device and verifies the landing manifest and summary against their recorded hashes. Progress requires read access to the acceptance ledger and landing library. Check the closing generation and acceptance before reassigning that agent.
 
 ### Executive overview (0.7.0.0)
 

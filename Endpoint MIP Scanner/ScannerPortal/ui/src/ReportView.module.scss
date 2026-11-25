@@ -16,3 +16,16 @@
 .distribution { flex: 1 1 20rem; min-width: 0; }
 .distribution meter { width: min(8rem, 45%); }
 .distribution th { text-align: start; }
+
+.agentEditor {
+  max-width: 58rem;
+  margin: 1rem 0;
+  fieldset { display: grid; gap: .8rem; padding: 1rem; border: 1px solid #c8c8c8; }
+  legend { font-weight: 600; padding: 0 .4rem; overflow-wrap: anywhere; }
+  label { display: block; }
+  textarea { display: block; width: 100%; box-sizing: border-box; }
+  input, textarea, button { max-width: 100%; font: inherit; }
+  input:not([type=checkbox]), textarea { border: 1px solid #767676; padding: .3rem; }
+  fieldset fieldset > div { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; }
+  button { justify-self: start; }
+}
