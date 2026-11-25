@@ -14,6 +14,7 @@ if (args is ["--help"] or [])
     Console.WriteLine("MipSdkAudit <tenant-guid> <client-guid> <test-user-upn> [sit-guid]");
     Console.WriteLine("MipSdkAudit --check-sso <config.json>");
     Console.WriteLine("MipSdkAudit --config <config.json> --audit-log <inventory.jsonl>");
+    Console.WriteLine("MipSdkAudit --policy-requests-only <tenant-guid> <delegated-mip-client-guid>");
     Console.WriteLine("MipSdkAudit --policy-labels-only <tenant-guid> <delegated-mip-client-guid>");
     Console.WriteLine("MipSdkAudit --policy-catalog <tenant-guid> <delegated-mip-client-guid>");
     Console.WriteLine("MipSdkAudit --list-office-labels <config.json>");
@@ -30,7 +31,8 @@ bool listOfficeLabels = args is ["--list-office-labels", _];
 bool activityPilot = args is ["--office-activity-pilot", _, _, _, _];
 bool applyOfficeCopy = activityPilot || args is ["--apply-office-copy", _, _, _, _];
 bool labelsOnlyProbe = args is ["--policy-labels-only", _, _];
-bool catalog = labelsOnlyProbe || args is ["--policy-catalog", _, _];
+bool requestsOnlyProbe = args is ["--policy-requests-only", _, _];
+bool catalog = labelsOnlyProbe || requestsOnlyProbe || args is ["--policy-catalog", _, _];
 bool silentMode = catalog || checkSso || auditLog || listOfficeLabels || applyOfficeCopy;
 Guid tenantId = default, clientId = default, sitId = default;
 if (catalog && (!Guid.TryParse(args[1], out tenantId) || tenantId == Guid.Empty ||
@@ -146,14 +148,14 @@ try
                 Guid.NewGuid().ToString(), auth, "LocalMIPScanner lab", "en-US")
             {
                 Identity = new Identity(user!),
-                LoadSensitivityTypes = !labelsOnlyProbe
+                LoadSensitivityTypes = !(labelsOnlyProbe || requestsOnlyProbe)
             });
             Emit(new
             {
                 @event = "policy",
                 hasClassificationRules = engine.HasClassificationRules,
                 publishedLabelCount = engine.SensitivityLabels.Count,
-                rulePackageCount = engine.SensitivityTypes.Count
+                rulePackageCount = labelsOnlyProbe || requestsOnlyProbe ? (int?)null : engine.SensitivityTypes.Count
             });
 
             if (auditLog)
