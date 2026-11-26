@@ -51,12 +51,12 @@ $setupLock=[IO.File]::Open((Join-Path $base 'setup.lock'),'OpenOrCreate','ReadWr
 try {
     $files=[ordered]@{
         'Work/SharePointUpload/Start-ScannerPortalReceiver.ps1'='436709931086e3e53c0d193c76590c939f08dca7'
-        'Work/SharePointUpload/Read-ManagedInventoryProjection.ps1'='a06866e32d909aec43e85599ba69ef14f3dc042d'
-        'Work/SharePointUpload/Test-WorkPortalReception.ps1'='4c7f47a312ab7381029d51aaecedf291baa39927'
-        'deployment/Publish-ScannerPortalOverview.ps1'='f8cbb9f5697f82efae98fa1733cc58ff02d6c9a2'
+        'Work/SharePointUpload/Read-ManagedInventoryProjection.ps1'='55fbdeb2e7a36b576cec4528bddca991d98a352c'
+        'Work/SharePointUpload/Test-WorkPortalReception.ps1'='d40a63d0b66a8044ec242e64a9e710cea8bcd3e5'
+        'deployment/Publish-ScannerPortalOverview.ps1'='f511e5eddd7c70a4b4b19ea36989b255d0f2d0e1'
         'deployment/Invoke-ScannerPortalReceiverTask.ps1'='f377e5d4baf3dd60467645eb826eec7aa642a2c6'
     }
-    $release='https://raw.githubusercontent.com/ProfKaz/PurviewScripts/8eb345f3517fe69bf16c41b38edd7fc9ede1d177/Endpoint%20MIP%20Scanner/ScannerPortal'
+    $release='https://raw.githubusercontent.com/ProfKaz/PurviewScripts/a0f6f3fd22e6b0909bc4e4fe71ac374af1caafdc/Endpoint%20MIP%20Scanner/ScannerPortal'
     foreach ($relative in $files.Keys) {
         $target=Join-Path $base $relative
         [void][IO.Directory]::CreateDirectory((Split-Path $target))
