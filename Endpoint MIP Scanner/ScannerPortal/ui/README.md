@@ -169,3 +169,7 @@ Acceptance 2 is synthetic and should show 3 files, 1 detected type and 0
 coverage errors. Switch 1 to 2 to 1, then switch rapidly and confirm that
 the final selection keeps its own counts. Verify 2 responds with the sole
 Credit Card Number row showing 1 file and 3 matches.
+
+### Selecting a batch (0.13.1)
+
+Batch detail initially loads the highest acceptance ID visible to the signed-in reader. Use Show latest acceptance to refresh, or open an acceptance number in Run audit to display that exact run. The header identifies the acceptance and run ID. IDs saved in the web part properties remain available in the dropdown. An accepted item whose report is still pending displays its status instead of showing an older batch.

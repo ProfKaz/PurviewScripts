@@ -30,6 +30,7 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
   private request = 0;
   private configuration = 0;
   private options: IDropdownOption[] = [];
+  private tab = 'Overview';
   private selection = 0;
   private report?: Report;
   private error?: string;
@@ -53,7 +54,7 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
       const ids = parseAcceptanceIds(this.properties.acceptanceItemId || '', this.properties.historyItemIds || '');
       this.options = ids.map(id => ({ key: id, text: 'Acceptance #' + id }));
       if (ids.length > 1) void this.loadHistoryLabels(listId, ids, configuration);
-      this.select(listId, ids[0]);
+      void this.latest(listId);
     } catch (error) {
       this.error = error instanceof Error ? error.message : 'Invalid report configuration.';
       this.renderView(listId);
@@ -61,27 +62,28 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
   }
 
   private renderView(listId: string): void {
-    const selector = this.options.length > 1
+    const selector = this.options.length > 0
       ? React.createElement(Dropdown, {
-          label: 'Accepted batch', options: this.options, selectedKey: this.selection,
+          label: 'Accepted batch', options: this.options.some(o=>o.key===this.selection) || !this.selection ? this.options : [{key:this.selection,text:'Acceptance #'+this.selection}, ...this.options], selectedKey: this.selection,
           onChange: (_, option) => { if (option) this.select(listId, Number(option.key)); }
         })
       : null;
-    const report = React.createElement(React.Fragment, null, selector,
+    const report = React.createElement(React.Fragment, null, selector, React.createElement('button',{onClick:()=>void this.latest(listId)},'Show latest acceptance'),
+      this.selection > 0 && React.createElement('p',null,'Acceptance #'+this.selection+(this.report?' · Run '+this.report.BatchId:'')),
       React.createElement(ReportView, { report: this.report, error: this.error, key: this.request }));
     const path = this.properties.publishedProfilePath?.trim();
     this.root?.render(React.createElement(React.Fragment, null,
-        React.createElement(Pivot, { 'aria-label': 'Scanner Portal' },
-          React.createElement(PivotItem, { headerText: 'Overview' }, React.createElement(Overview, { load: this.loadOverview })),
-          React.createElement(PivotItem, { headerText: 'Fleet coverage' }, React.createElement(FleetCoverage, { client: this.context.spHttpClient, web: this.context.pageContext.web.absoluteUrl, relative: this.context.pageContext.web.serverRelativeUrl })),
-          React.createElement(PivotItem, { headerText: 'Batch detail' }, report),
-          React.createElement(PivotItem, { headerText: 'Run audit' }, React.createElement(RunAudit, {
-            client:this.context.spHttpClient, web:this.context.pageContext.web.absoluteUrl, ledger:listId
+        React.createElement(Pivot, { 'aria-label': 'Scanner Portal', selectedKey:this.tab, onLinkClick:item=>{ if(item?.props.itemKey){ this.tab=item.props.itemKey; this.renderView(listId); } } },
+          React.createElement(PivotItem, { itemKey:'Overview', headerText: 'Overview' }, React.createElement(Overview, { load: this.loadOverview })),
+          React.createElement(PivotItem, { itemKey:'Fleet coverage', headerText: 'Fleet coverage' }, React.createElement(FleetCoverage, { client: this.context.spHttpClient, web: this.context.pageContext.web.absoluteUrl, relative: this.context.pageContext.web.serverRelativeUrl })),
+          React.createElement(PivotItem, { itemKey:'Batch detail', headerText: 'Batch detail' }, report),
+          React.createElement(PivotItem, { itemKey:'Run audit', headerText: 'Run audit' }, React.createElement(RunAudit, {
+            client:this.context.spHttpClient, web:this.context.pageContext.web.absoluteUrl, ledger:listId, openBatch:(id:number)=>{this.tab='Batch detail';this.select(listId,id);}
           })),
-          React.createElement(PivotItem, { headerText: 'Consolidated inventory' },
+          React.createElement(PivotItem, { itemKey:'Consolidated inventory', headerText: 'Consolidated inventory' },
             React.createElement(ConsolidatedView, { key: listId, load: this.loadCycles })),
-          this.agents && React.createElement(PivotItem, { headerText: 'Agent management' }, React.createElement(AgentSettings, {store: this.agents})),
-          path && React.createElement(PivotItem, { headerText: 'Configuration' },
+          this.agents && React.createElement(PivotItem, { itemKey:'Agent management', headerText: 'Agent management' }, React.createElement(AgentSettings, {store: this.agents})),
+          path && React.createElement(PivotItem, { itemKey:'Configuration', headerText: 'Configuration' },
             React.createElement(ConfigurationView, { key: path, path, load: this.loadProfile }))),
         React.createElement('footer', { className: styles.brand },
           'Powered by KazDemos',
@@ -137,6 +139,25 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
       : 'Could not load the published profile. Try again.');
     return response.arrayBuffer();
   };
+
+  private async latest(listId: string): Promise<void> {
+    const request=++this.request;
+    this.selection=0; this.report=undefined; this.error=undefined; this.renderView(listId);
+    try {
+      const url=this.context.pageContext.web.absoluteUrl+"/_api/web/lists(guid'"+listId+"')/items?$select=Id&$orderby=Id desc&$top=1";
+      const response=await this.context.spHttpClient.get(url,SPHttpClient.configurations.v1,{headers:{'Cache-Control':'no-cache'}});
+      if (!response.ok) throw new Error('Could not read the latest acceptance (HTTP '+response.status+').');
+      const data=await response.json();
+      if(this.request!==request) return;
+      const id=data.value?.[0]?.Id;
+      if(!Number.isSafeInteger(id)||id<1) throw new Error('No accepted batches are available.');
+      this.select(listId,id);
+    } catch(e) {
+      if(this.request!==request) return;
+      this.error=e instanceof Error?e.message:'Could not load the latest acceptance.';
+      this.renderView(listId);
+    }
+  }
 
   private select(listId: string, itemId: number): void {
     this.selection = itemId;

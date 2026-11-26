@@ -14,7 +14,7 @@ export interface AuditRow {
 const columns = { RunComputer: 'Computer name', RunAccount: 'Windows account', RunAccountSid: 'Windows SID' };
 type Column = keyof typeof columns;
 
-export function RunAudit({client, web, ledger}: {client:SPHttpClient; web:string; ledger:string}):React.ReactElement {
+export function RunAudit({client, web, ledger, openBatch}: {client:SPHttpClient; web:string; ledger:string; openBatch:(id:number)=>void}):React.ReactElement {
   const [field,setField] = React.useState<Column>('RunComputer');
   const [term,setTerm] = React.useState('');
   const [query,setQuery] = React.useState({field, term:'', before:0});
@@ -58,7 +58,7 @@ export function RunAudit({client, web, ledger}: {client:SPHttpClient; web:string
     <div aria-live="polite">{busy?'Loading runs…':!error&&!rows.length?'No matching runs.':''}</div>
     {rows.length>0 && <div style={{overflowX:'auto'}}><table><thead><tr>
       {['Acceptance','Accepted (UTC)','Computer','Windows account','SID','Registration','Run / batch ID'].map(h=><th scope="col" key={h}>{h}</th>)}
-    </tr></thead><tbody>{rows.map(r=><tr key={r.Id}><td>{r.Id}</td><td>{new Date(r.Created).toISOString()}</td>
+    </tr></thead><tbody>{rows.map(r=><tr key={r.Id}><td><button type="button" aria-label={'Open acceptance '+r.Id} onClick={()=>openBatch(r.Id)}>{r.Id}</button></td><td>{new Date(r.Created).toISOString()}</td>
       <td>{r.RunComputer || 'Unknown'}</td><td>{r.RunAccount || 'Unknown'}</td><td>{r.RunAccountSid || 'Unknown'}</td>
       <td>{r.ReportingDeviceId}</td><td>{r.BatchId}</td></tr>)}</tbody></table></div>}
     {more && <button type="button" disabled={busy} onClick={()=>setQuery({...query,before:rows[rows.length-1].Id})}>Load older runs</button>}
