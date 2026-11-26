@@ -22,24 +22,24 @@ export function ReportView({ report, error }: { report?: Report; error?: string 
   const rows = report.BySit.filter(row => (row.Name || '').toLocaleLowerCase().includes(needle) || row.SitId.toLowerCase().includes(needle))
     .sort((a, b) => sort === 'Name' ? (a.Name || a.SitId).localeCompare(b.Name || b.SitId) : b[sort] - a[sort] || a.SitId.localeCompare(b.SitId));
 
-  if (inventory) return <section className={styles.report} aria-label="Managed inventory report">
+  if (inventory) return <section className={styles.managedReport} aria-label="Managed inventory report">
     <div className={styles.body}>
       <h2>Managed inventory</h2>
       <p>{inventory.GenerationComplete ? 'Inventory generation complete' : 'Partial inventory generation'}</p>
       <div className={styles.metrics}>
         <div><strong>{number.format(total)}</strong>Files inventoried in this run</div>
-        <div><strong>{number.format(inventory.AnalyzedFiles)}</strong>Files analyzed in this run</div>
+        <div><strong>{number.format(inventory.AnalyzedFiles)}</strong>Files analyzed by local rules</div>
         <div><strong>{number.format(inventory.FilesWithMatches)}</strong>Files with local rule matches</div>
         <div><strong>{number.format(report.CoverageErrors)}</strong>Inventory errors</div>
       </div>
-      {inventory.Purview && <section><h3>Microsoft Purview discovery</h3><p>Matched: {inventory.Purview.WithMatches} · Evaluated without matches: {inventory.Purview.NoMatches} · Unknown: {inventory.Purview.Unknown}</p>
+      {inventory.Purview && <section className={styles.discovery}><h3>Microsoft Purview discovery</h3><p>Matched: {inventory.Purview.WithMatches} · Evaluated without matches: {inventory.Purview.NoMatches} · Unknown: {inventory.Purview.Unknown}</p>
         <table><caption>Explicitly selected sensitive information types</caption><thead><tr><th>SIT GUID</th><th>Files</th><th>Matches</th></tr></thead><tbody>{inventory.Purview.Types.map(t=><tr key={t.SitId}><td>{t.SitId}</td><td>{t.Files}</td><td>{t.Matches}</td></tr>)}</tbody></table>
-        <p>Labeled: {inventory.Purview.Labeled} · Unlabeled: {inventory.Purview.Unlabeled} · Label unknown: {inventory.Purview.LabelUnknown}</p>
+        <h4>Sensitivity labels</h4><p>Labeled: {inventory.Purview.Labeled} · Unlabeled: {inventory.Purview.Unlabeled} · Label unknown: {inventory.Purview.LabelUnknown}</p>
         {inventory.Purview.Labels.map(l=><p key={l.Id}>{l.Id}: {l.Files}</p>)}</section>}
       <p>{inventory.AuditEnabled
         ? 'Local content rules (TXT and CSV). Reused: ' + number.format(inventory.ReusedFiles) +
           '. Skipped: ' + number.format(inventory.AuditSkippedFiles) + '. Audit errors: ' + number.format(inventory.AuditErrors) + '.'
-        : 'Content audit disabled.'}</p>
+        : 'Local rule audit disabled.'}</p>
       <div className={styles.panels}>
         <table><caption>Files by extension</caption><thead><tr><th scope="col">Extension</th><th scope="col">Files</th></tr></thead>
           <tbody>{report.ByExtension.map(row => <tr key={row.Extension}><td>{row.Extension}</td><td>{number.format(row.Files)}</td></tr>)}</tbody>

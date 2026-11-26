@@ -29,3 +29,28 @@
   fieldset fieldset > div { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; }
   button { justify-self: start; }
 }
+
+.managedReport {
+  width: 100%;
+  min-width: 0;
+  color: "[theme:bodyText, default:#242424]";
+  .metrics, .panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+    gap: .75rem;
+  }
+  .panels { grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); align-items: start; }
+  .metrics div { border-radius: 4px; }
+  .body th { overflow-wrap: normal; }
+}
+.discovery {
+  margin-block: 1.25rem;
+  padding: 1rem;
+  border: 1px solid "[theme:neutralLight, default:#ddd]";
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+  h3 { margin: 0; }
+  h4 { margin-block: 1rem .25rem; }
+  h4 + p { margin-top: 0; }
+  th:not(:first-child), td:not(:first-child) { text-align: end; white-space: nowrap; }
+}
