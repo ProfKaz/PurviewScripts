@@ -7,6 +7,7 @@ export interface Report {
   ManagedInventory?: {
     AuditEnabled: boolean; AnalyzedFiles: number; ReusedFiles: number; FilesWithMatches: number;
     AuditSkippedFiles: number; AuditErrors: number; GenerationComplete: boolean;
+    Purview?: { Inspected:number; WithMatches:number; NoMatches:number; Unknown:number; Labeled:number; Unlabeled:number; LabelUnknown:number; Types:{SitId:string; Files:number; Matches:number}[]; Labels:{Id:string; Files:number}[] };
     ByLocalRule: { RuleId: string; Files: number; Matches: number }[];
   };
   ByExtension: { Extension: string; Files: number }[];

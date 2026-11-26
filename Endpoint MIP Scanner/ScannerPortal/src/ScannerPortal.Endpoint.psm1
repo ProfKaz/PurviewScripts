@@ -1,9 +1,10 @@
 <#PSScriptInfo
-.VERSION 1.1.0
+.VERSION 1.2.0
 .GUID a0bd04b9-f8bf-44bf-93d2-de2a27099420
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+1.2.0 Managed discovery and reporting for explicitly selected Purview SITs.
 2026-11-25 1.1.0 Report fleet contact independently of scan findings.
 2026-11-23 1.0.1 Managed checkpoint resumption across cycle log directories.
 2026-11-20 1.0.0 Certificate enrollment, validated pull profiles and verified report delivery.
@@ -12,7 +13,7 @@
 .DESCRIPTION
 PS5.1 endpoint control-plane pilot. Application identity is shared, not per-device authorization.
 .NOTES
-Version     : 1.1.0
+Version     : 1.2.0
 Tracking ID : a0bd04b9-f8bf-44bf-93d2-de2a27099420
 #>
 #Requires -Version 5.1
@@ -120,7 +121,17 @@ function Get-PortalRemoteJson([string]$Token,[string]$DriveId,[string]$Path) {
 }
 
 function Test-PortalProfile($Profile) {
-    Assert-PortalKeys $Profile @('schemaVersion','profileId','version','expiresUtc','execution','files')
+    $keys=@('schemaVersion','profileId','version','expiresUtc','execution','files')
+    if ($Profile.Contains('purviewSitIds')) {
+        $keys+='purviewSitIds'
+        $ids=$Profile.purviewSitIds
+        if ($ids -isnot [array] -or $ids.Count -lt 1 -or $ids.Count -gt 16 -or @($ids | Sort-Object -Unique).Count -ne $ids.Count) { throw 'Invalid selected SIT list.' }
+        foreach ($id in $ids) {
+            $parsed=[guid]::Empty
+            if (-not [guid]::TryParseExact([string]$id,'D',[ref]$parsed) -or $parsed -eq [guid]::Empty) { throw 'Invalid selected SIT GUID.' }
+        }
+    }
+    Assert-PortalKeys $Profile $keys
     if ($Profile.schemaVersion -ne 1 -or $Profile.profileId -notmatch '^[a-z0-9][a-z0-9-]{0,63}$' -or $Profile.version -notmatch '^\d+\.\d+\.\d+$') { throw 'Unsupported profile identity/version.' }
     $expires = [DateTimeOffset]::Parse($Profile.expiresUtc, [Globalization.CultureInfo]::InvariantCulture)
     if ($expires.Offset -ne [timespan]::Zero -or $expires -le [DateTimeOffset]::UtcNow) { throw 'Profile is expired or not UTC.' }
@@ -212,13 +223,15 @@ function Get-PortalScanParameters($Registration,$Profile,[string]$Directory) {
         extensions=$files['extensions.json'];exclusions=@(foreach($path in $exclusions){[Environment]::ExpandEnvironmentVariables($path)})
         auditContent=$Profile.Profile.execution.auditContent;incremental=$incremental}
     if ($Profile.Profile.execution.auditContent) {$scope.classifiers=$files['classifiers.json']}
+    $sitIds=@()
+    if ($Profile.Profile.Contains('purviewSitIds')) { $sitIds=$Profile.Profile.purviewSitIds; $scope.purviewSitIds=$sitIds }
     $canonical=ConvertTo-Json -InputObject (ConvertTo-PortalCanonicalValue $scope) -Depth 20 -Compress
     $hash=Get-WinPSSha256 ([Text.Encoding]::UTF8.GetBytes($canonical))
     # A changed scope starts a separate resumable generation; an old journal is never discarded.
     $incremental.stateDirectory=Join-Path (Join-Path $base $Registration.registrationId) $hash
     Write-PortalJson $incremental (Join-Path $Profile.ConfigDirectory 'incremental.json') -Bom
     $logs=Join-Path $Directory 'logs'
-    @{Root=@($Profile.Profile.execution.roots);ConfigDirectory=$Profile.ConfigDirectory;LogDirectory=$logs;LogScopeDirectory=$logs
+    @{PurviewSitIds=$sitIds;Root=@($Profile.Profile.execution.roots);ConfigDirectory=$Profile.ConfigDirectory;LogDirectory=$logs;LogScopeDirectory=$logs
         MaxSeconds=[int]$Profile.Profile.execution.maxSeconds;AuditContent=[bool]$Profile.Profile.execution.auditContent}
 }
 

@@ -25,6 +25,10 @@ function ProfileEditor({ agent, store, saved }: {agent: LoadedAgent; store: Agen
       const str = (k:string):string => String(data.get(k) || '').trim();
       const list = (k:string):string[] => str(k).split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
       const draft = JSON.parse(JSON.stringify(p)) as AgentProfile;
+      const sitIds = list('purviewSits').map(x=>x.toLowerCase());
+      if (sitIds.length > 16 || new Set(sitIds).size !== sitIds.length ||
+          sitIds.some(id=>!(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/).test(id) || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(id))) throw new Error('Enter up to 16 distinct Purview SIT GUIDs.');
+      if (sitIds.length) draft.purviewSitIds = sitIds; else delete draft.purviewSitIds;
       draft.expiresUtc = str('expires');
       if (!/(Z|\+00:00)$/i.test(draft.expiresUtc) || !(Date.parse(draft.expiresUtc)>Date.now())) throw new Error('Enter a future expiration in UTC.');
       draft.execution = { paused:data.has('paused'), auditContent:data.has('audit'), roots:list('roots'), maxSeconds:Number(str('max')), idleSeconds:Number(str('idle')) };
@@ -42,7 +46,7 @@ function ProfileEditor({ agent, store, saved }: {agent: LoadedAgent; store: Agen
       draft.files['incremental.json'] = {enabled:data.has('incremental'),rescanIntervalDays:Number(str('days')),detectModifiedFiles:data.has('modified'),
         detectDeletedFiles:data.has('deleted'),forceFullScan:data.has('force'),maxFileSizeMB:Number(str('size')),stateDirectory:str('state')};
       if (rescan && (draft.execution.paused || !draft.files['incremental.json'].enabled)) throw new Error('Enable scanning and incremental state to request a full rescan.');
-      if (!rescan && JSON.stringify(draft.files)===JSON.stringify(p.files) && JSON.stringify(draft.execution.roots)===JSON.stringify(p.execution.roots) &&
+      if (!rescan && JSON.stringify(draft.purviewSitIds)===JSON.stringify(p.purviewSitIds) && JSON.stringify(draft.files)===JSON.stringify(p.files) && JSON.stringify(draft.execution.roots)===JSON.stringify(p.execution.roots) &&
         Object.keys(draft.execution).every(key=>key==='roots'||draft.execution[key as keyof typeof p.execution]===p.execution[key as keyof typeof p.execution]) && draft.expiresUtc===p.expiresUtc) {
         setMessage('No configuration changes to publish.'); return;
       }
@@ -56,6 +60,12 @@ function ProfileEditor({ agent, store, saved }: {agent: LoadedAgent; store: Agen
     <legend>{p.profileId} · {p.version}</legend>
     {toggle('paused','Pause this agent',p.execution.paused)}{toggle('audit','Audit content',p.execution.auditContent)}
     {lines('roots','Scan roots (one per line)',p.execution.roots,true)}
+    <fieldset><legend>Microsoft Purview discovery</legend>
+      {lines('purviewSits','Selected SIT GUIDs (one per line)',p.purviewSitIds || [])}
+      <p>Leave empty to disable. A selection checks each inventoried file with the installed Purview client and reads its sensitivity label separately. Start with the pilot controls folder.</p>
+      <button type="button" onClick={()=>{const input=form.current?.elements.namedItem('purviewSits') as HTMLTextAreaElement;
+        const id='50842eb7-edc8-4019-85dd-5a5c1f2bb085'; if(input && !input.value.toLowerCase().includes(id)) input.value=(input.value.trim()+'\n'+id).trim();}}>Add Credit card number</button>
+    </fieldset>
     {lines('extensions','File extensions (one per line)',p.files['extensions.json'],true)}
     {lines('excluded','Excluded paths (one per line)',p.files['exclusions.json'])}
     <fieldset><legend>Sensitive data · local detection rules</legend>

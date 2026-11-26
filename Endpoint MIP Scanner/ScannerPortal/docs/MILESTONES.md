@@ -39,6 +39,8 @@ Secuencia del piloto: validar en SPO la actualización automática del resumen, 
 | Acceso por función | Pendiente. Lectores acceden al resumen; operadores al diagnóstico y conciliación; administradores a perfiles, altas, bajas y permisos. Aplicar ACL en página, bibliotecas y listas, probar acceso directo por URL/API y restringir acceso a rutas crudas. |
 | Escala | Pendiente. Actualizar proyecciones de forma incremental por aceptación y publicar particiones consistentes por período/dispositivo. Medir tiempos de ingesta, tamaño de respuesta y latencia con 1.000, 10.000 y 100.000 registros antes de definir capacidades adicionales. |
 
+El piloto 0.13.0.0 / 1.4.5 incorpora selección explícita de SIT por GUID, lectura independiente de la etiqueta y proyección por ciclo. La aceptación en el tenant requiere observar los dos controles en la tarea de Priya. El inventario vigente y la selección dinámica desde el catálogo efectivo siguen pendientes.
+
 ## Próximas entregas del piloto (25 de noviembre de 2026)
 
 | Orden | Entrega | Prueba de aceptación |

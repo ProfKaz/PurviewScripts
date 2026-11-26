@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.1.1
+.VERSION 1.2.0
 
 .GUID 618abe92-fc46-4d02-a9b1-f37377ae2206
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+1.2.0 Managed discovery and reporting for explicitly selected Purview SITs.
 2026-11-23 1.1.1 Managed checkpoint resumption across cycle log directories.
 2026-11-18  1.1.0  Consolidated Endpoint MIP Scanner layout, shared lab and unified setup.
 Tracking ID: 618abe92-fc46-4d02-a9b1-f37377ae2206
@@ -22,7 +23,7 @@ Endpoint MIP Scanner component: LocalMIPScanner.WinPS51/LocalMIPScanner.psm1.
 .NOTES
 HISTORY
 Script      : LocalMIPScanner.WinPS51/LocalMIPScanner.psm1
-Version     : 1.1.1
+Version     : 1.2.0
 Tracking ID : 618abe92-fc46-4d02-a9b1-f37377ae2206
 2026-11-18  Kaz Demos  First tracked suite release; preserves prior milestone implementation.
 #>
@@ -123,7 +124,7 @@ function Get-InventoryConfig {
 function Write-InventoryEvent {
     param([IO.StreamWriter] $Writer, [System.Collections.IDictionary] $Event)
 
-    $Writer.WriteLine((ConvertTo-Json -InputObject $Event -Compress))
+    $Writer.WriteLine((ConvertTo-Json -InputObject $Event -Depth 8 -Compress))
 }
 
 function Invoke-InventoryDirectory {
@@ -244,13 +245,56 @@ function Invoke-InventoryDirectory {
                 $Summary.pendingClassification++
             }
 
-            Write-InventoryEvent $Writer ([ordered] @{
+            $fileEvent = [ordered] @{
                 event = 'file'; path = $path; extension = $entry.Extension.ToLowerInvariant()
                 sizeBytes = $size; lastWriteUtc = $modified; decision = $decision
-            })
+            }
+            if ($Config.PurviewSitIds.Count) {
+                $fileEvent.purview = Get-InventoryPurviewObservation $path $Config.PurviewSitIds
+            }
+            Write-InventoryEvent $Writer $fileEvent
             $Summary.inventoried++
         }
     } finally { $entries.Dispose() }
+}
+
+function Get-InventoryPurviewObservation([string]$Path,[guid[]]$SitIds) {
+    $result = [ordered]@{ engine='PurviewInformationProtection'; requested=@($SitIds | ForEach-Object { $_.ToString() })
+        discovery='Error'; findings=@(); labelRead='Error'; labelId=$null }
+    try {
+        $rows = @(PurviewInformationProtection\Set-FileLabel -Path $Path -WhatIf -DiscoveryInfoTypes $result.requested -ErrorAction Stop)
+        if ($rows.Count -eq 0) { $result.discovery='NoResponse' }
+        elseif ($rows.Count -eq 1 -and [string]$rows[0].Status -in 'Skipped','Success' -and
+            $rows[0].PSObject.Properties['MatchedInformationTypes']) {
+            $seen = @{}
+            $findings = @(foreach ($match in $rows[0].MatchedInformationTypes) {
+                if ($null -eq $match) { continue }
+                $id = ([guid]$match.RuleId).ToString()
+                $count = [long]$match.Count
+                $confidence = [int]$match.Confidence
+                if ($id -notin $result.requested -or $seen.ContainsKey($id) -or $count -lt 1 -or $confidence -notin (0..100)) { throw 'Unexpected discovery result' }
+                $seen[$id]=$true
+                @{sitId=$id;count=$count;confidence=$confidence}
+            })
+            $result.findings=$findings
+            $result.discovery=if ($findings.Count) {'Matched'} else {'NoMatch'}
+        }
+    } catch { $result.discovery='Error' }
+    try {
+        $rows = @(PurviewInformationProtection\Get-FileStatus -Path $Path -ErrorAction Stop)
+        if ($rows.Count -eq 0) { $result.labelRead='NoResponse' }
+        elseif ($rows.Count -eq 1 -and $rows[0].IsLabeled -is [bool]) {
+            if ($rows[0].IsLabeled) {
+                foreach ($raw in @($rows[0].SubLabelId,$rows[0].MainLabelId)) {
+                    $id=[guid]::Empty
+                    if ([guid]::TryParse([string]$raw,[ref]$id) -and $id -ne [guid]::Empty) {
+                        $result.labelId=$id.ToString(); $result.labelRead='Labeled'; break
+                    }
+                }
+            } else { $result.labelRead='Unlabeled' }
+        }
+    } catch { $result.labelRead='Error' }
+    return $result
 }
 
 function Invoke-CheckpointedDiscovery {
@@ -290,12 +334,14 @@ function Invoke-LocalMIPInventory {
         [string[]] $Root, [string] $ConfigDirectory, [string] $LogDirectory, [string] $LogScopeDirectory,
         [ValidateRange(0, 2147483647)] [int] $MaxDirectories = 0,
         [ValidateRange(0, 2147483647)] [int] $MaxSeconds = 0,
+        [guid[]] $PurviewSitIds = @(),
         [switch] $AuditContent
     )
 
     if ($env:OS -ne 'Windows_NT') { throw 'LocalMIPScanner requires Windows.' }
     $config = Get-InventoryConfig $ConfigDirectory
     $incremental = Get-IncrementalSettings $ConfigDirectory
+    $config.PurviewSitIds = $PurviewSitIds
     $config.ContentAudit = $null
     if ($AuditContent) {
         if (-not $incremental.Enabled) { throw 'Content audit requires incremental discovery.' }

@@ -1,9 +1,10 @@
 <#PSScriptInfo
-.VERSION 0.8.0
+.VERSION 0.9.0
 .GUID 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+0.9.0 Managed discovery and reporting for explicitly selected Purview SITs.
 0.8.0 Store and verify endpoint-reported Windows identity on managed acceptance rows.
 0.7.0 Allow the discovery worker to reuse its authenticated site connection.
 0.6.0 Refresh the configured overview following verified report storage or reuse.
@@ -16,7 +17,7 @@
 .DESCRIPTION
 Downloads and validates a sealed batch with existing Setup identity and PS5.1 contract. Optional central acceptance add/readback; no endpoint outbox access.
 .NOTES
-Version     : 0.8.0
+Version     : 0.9.0
 Tracking ID : 9db4ac4a-f2e7-4fd6-9413-1557d38fb74f
 #>
 #Requires -Version 7.4
@@ -245,6 +246,9 @@ try{
    $report.PortalIngestionConfirmed=$true
    $report.ReportSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($stored)))
    $report.SitTypes=$report.BySit.Count
+   if ($ManagedInventory -and $managed.Inventory.Contains('Purview')) {
+    $report.SitTypes=@($managed.Inventory.Purview.Types | Where-Object Files -gt 0).Count
+   }
    $report.Remove('BySit')
    $publisher=Join-Path $PSScriptRoot '../../deployment/Publish-ScannerPortalOverview.ps1'
    try {

@@ -1,16 +1,17 @@
 <#PSScriptInfo
-.VERSION 0.5.0
+.VERSION 0.6.0
 .GUID d8a2a089-3acf-437a-972a-621e62bc2fd6
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+0.6.0 Managed discovery and reporting for explicitly selected Purview SITs.
 0.5.0 Test scan identity storage, conflicting values and enrichment during revalidation.
 2026-11-21 0.2.0 Central acceptance lost-response/repeat, conflict and unsafe ACL tests.
 2026-11-21 0.1.0 Mock PnP transport, real Windows PowerShell contract verifier, repeat and corruption tests.
 #>
 <#
 .NOTES
-Version     : 0.5.0
+Version     : 0.6.0
 Tracking ID : d8a2a089-3acf-437a-972a-621e62bc2fd6
 #>
 #Requires -Version 7.4
@@ -124,7 +125,8 @@ try{
  $common.TargetRelativePath="devices/$registrationId/batches/$runId"
  $managedSummary=@{event='summary';runId=$runId;inventoried=1;errors=0;generationComplete=$true}
  $events=@(@{event='file';extension='.txt';path='C:\synthetic.txt'},$managedSummary)
- $events | ForEach-Object { $_ | ConvertTo-Json -Compress } | Set-Content (Join-Path $fixture 'records.jsonl') -Encoding utf8
+ $events[0].purview=@{engine='PurviewInformationProtection';requested=@('50842eb7-edc8-4019-85dd-5a5c1f2bb085');discovery='Matched';findings=@(@{sitId='50842eb7-edc8-4019-85dd-5a5c1f2bb085';count=1;confidence=85});labelRead='Error';labelId=$null}
+ $events | ForEach-Object { $_ | ConvertTo-Json -Depth 8 -Compress } | Set-Content (Join-Path $fixture 'records.jsonl') -Encoding utf8
  @{schemaVersion=1;source='LocalMIPScanner.WinPS51';tenantId=$common.TenantId.ToString();registrationId=$registrationId;summary=$managedSummary
    deviceName='LAB-01';executionAccountName='LAB\AuditedUser';executionAccountSid='S-1-5-21-123-456-789-1001'} |
     ConvertTo-Json | Set-Content (Join-Path $fixture 'summary.json') -Encoding utf8
@@ -136,6 +138,7 @@ try{
     ConvertTo-Json | Set-Content (Join-Path $fixture 'manifest.json')
  $common.ExpectedManifestSha256=(Get-FileHash (Join-Path $fixture 'manifest.json')).Hash
  $managed=& $scriptPath @common
+ Assert ($managed.ManagedInventory.Purview.WithMatches -eq 1 -and $managed.ManagedInventory.Purview.Types[0].Matches -eq 1 -and $managed.ManagedInventory.Purview.LabelUnknown -eq 1 -and $managed.SitTypes -eq 1) 'Purview finding lost when label read failed.'
  $repeatManaged=& $scriptPath @common
  Assert ($global:ReceiverFixture.Item.RunComputer -ceq 'LAB-01' -and $global:ReceiverFixture.Item.RunAccount -ceq 'LAB\AuditedUser' -and
     $global:ReceiverFixture.Item.RunAccountSid -ceq 'S-1-5-21-123-456-789-1001') 'Scan identity readback failed.'

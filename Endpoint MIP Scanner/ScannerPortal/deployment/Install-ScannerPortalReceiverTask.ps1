@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.2.0
+.VERSION 0.3.0
 .GUID a3efe777-a548-4386-bdbb-f6626e8d512f
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.3.0 Managed discovery and reporting for explicitly selected Purview SITs.
 0.2.0 Support code-only updates and verified scan identity projection.
 0.1.1 Resolve PnP.PowerShell in an isolated machine runtime and stage the package when missing.
 0.1.0 Provision a site-scoped receiver application, machine certificate and recurring startup task.

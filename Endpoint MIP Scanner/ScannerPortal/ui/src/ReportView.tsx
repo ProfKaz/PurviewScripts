@@ -32,6 +32,10 @@ export function ReportView({ report, error }: { report?: Report; error?: string 
         <div><strong>{number.format(inventory.FilesWithMatches)}</strong>Files with local rule matches</div>
         <div><strong>{number.format(report.CoverageErrors)}</strong>Inventory errors</div>
       </div>
+      {inventory.Purview && <section><h3>Microsoft Purview discovery</h3><p>Matched: {inventory.Purview.WithMatches} · Evaluated without matches: {inventory.Purview.NoMatches} · Unknown: {inventory.Purview.Unknown}</p>
+        <table><caption>Explicitly selected sensitive information types</caption><thead><tr><th>SIT GUID</th><th>Files</th><th>Matches</th></tr></thead><tbody>{inventory.Purview.Types.map(t=><tr key={t.SitId}><td>{t.SitId}</td><td>{t.Files}</td><td>{t.Matches}</td></tr>)}</tbody></table>
+        <p>Labeled: {inventory.Purview.Labeled} · Unlabeled: {inventory.Purview.Unlabeled} · Label unknown: {inventory.Purview.LabelUnknown}</p>
+        {inventory.Purview.Labels.map(l=><p key={l.Id}>{l.Id}: {l.Files}</p>)}</section>}
       <p>{inventory.AuditEnabled
         ? 'Local content rules (TXT and CSV). Reused: ' + number.format(inventory.ReusedFiles) +
           '. Skipped: ' + number.format(inventory.AuditSkippedFiles) + '. Audit errors: ' + number.format(inventory.AuditErrors) + '.'

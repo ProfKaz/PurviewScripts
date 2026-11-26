@@ -2,6 +2,7 @@ import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 import { parseProfilePath, PublishedProfile, readPublishedProfile } from './profile';
 
 export interface AgentProfile extends PublishedProfile {
+  purviewSitIds?: string[];
   files: PublishedProfile['files'] & {
     'performance.json': { batchSize: number; pauseMilliseconds: number };
     'incremental.json': { enabled: boolean; rescanIntervalDays: number; detectModifiedFiles: boolean; detectDeletedFiles: boolean;

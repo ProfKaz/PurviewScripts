@@ -1,12 +1,12 @@
 {
   "SchemaVersion": 1,
-  "SuiteVersion": "1.4.4",
+  "SuiteVersion": "1.4.5",
   "Project": "Endpoint MIP Scanner",
   "Bootstrap": "Install-EndpointMIPScanner.ps1",
   "Scripts": [
     {
       "Path": "ScannerPortal/deployment/Install-ScannerPortalReceiverTask.ps1",
-      "Version": "0.2.0",
+      "Version": "0.3.0",
       "TrackingId": "a3efe777-a548-4386-bdbb-f6626e8d512f"
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "Path": "LocalMIPScanner.WinPS51/Invoke-LocalMIPScanner.ps1",
-      "Version": "1.1.1",
+      "Version": "1.2.0",
       "TrackingId": "ad7c5a2e-6eb7-4fbd-9195-b0368dd692a5"
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "Path": "LocalMIPScanner.WinPS51/LocalMIPScanner.psm1",
-      "Version": "1.1.1",
+      "Version": "1.2.0",
       "TrackingId": "618abe92-fc46-4d02-a9b1-f37377ae2206"
     },
     {
@@ -221,7 +221,7 @@
     },
     {
       "Path": "Install-EndpointMIPScanner.ps1",
-      "Version": "1.4.4",
+      "Version": "1.4.5",
       "TrackingId": "0576cc7a-692e-4876-bfe5-d1fb62a30116"
     },
     {
@@ -271,7 +271,7 @@
     },
     {
       "Path": "ScannerPortal/src/ScannerPortal.Endpoint.psm1",
-      "Version": "1.1.0",
+      "Version": "1.2.0",
       "TrackingId": "a0bd04b9-f8bf-44bf-93d2-de2a27099420"
     },
     {
@@ -366,17 +366,17 @@
     },
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Read-ManagedInventoryProjection.ps1",
-      "Version": "1.1.0",
+      "Version": "1.2.0",
       "TrackingId": "90597121-8cef-4f5a-8319-8dcbc209e048"
     },
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkPortalReception.ps1",
-      "Version": "0.8.0",
+      "Version": "0.9.0",
       "TrackingId": "9db4ac4a-f2e7-4fd6-9413-1557d38fb74f"
     },
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Test-WorkPortalReceptionOffline.ps1",
-      "Version": "0.5.0",
+      "Version": "0.6.0",
       "TrackingId": "d8a2a089-3acf-437a-972a-621e62bc2fd6"
     },
     {
@@ -396,12 +396,12 @@
     },
     {
       "Path": "ScannerPortal/deployment/Install-ScannerPortalReport.ps1",
-      "Version": "0.12.0",
+      "Version": "0.13.0",
       "TrackingId": "7bb7b04d-f2b8-4d7d-8840-ec9a8972352b"
     },
     {
       "Path": "ScannerPortal/deployment/Publish-ScannerPortalOverview.ps1",
-      "Version": "0.2.0",
+      "Version": "0.3.0",
       "TrackingId": "fbd56309-9178-4238-b5df-1fbba2b853c4"
     },
     {

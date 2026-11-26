@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.4.4
+.VERSION 1.4.5
 
 .GUID 0576cc7a-692e-4876-bfe5-d1fb62a30116
 
@@ -11,6 +11,7 @@
 .PROJECTURI https://github.com/ProfKaz/PurviewScripts
 
 .RELEASENOTES
+1.4.5 Managed discovery and reporting for explicitly selected Purview SITs.
 2026-11-25  1.4.4  Publish assigned agent heartbeats.
 2026-11-23  1.4.3  Resume managed inventory across per-cycle log directories.
 2026-11-23  1.4.2  Build the console-free managed task host.
@@ -29,7 +30,7 @@ Endpoint MIP Scanner component: Install-EndpointMIPScanner.ps1.
 .NOTES
 HISTORY
 Script      : Install-EndpointMIPScanner.ps1
-Version     : 1.4.4
+Version     : 1.4.5
 Tracking ID : 0576cc7a-692e-4876-bfe5-d1fb62a30116
 2026-11-18  Kaz Demos  First tracked suite release; preserves prior milestone implementation.
 #>
@@ -251,7 +252,7 @@ try {
         $_.type -eq 'blob' -and $_.mode -in '100644','100755' -and $_.path.StartsWith($prefix)
     })
     if ($files.Count -eq 0) { throw 'Suite not found in this reference.' }
-    Write-Host "Endpoint MIP Scanner 1.4.4 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
+    Write-Host "Endpoint MIP Scanner 1.4.5 | Commit $sha | Stage $Stage" -ForegroundColor Magenta
     Write-Host "Verifying $($files.Count) suite files in $root"
     $stamp = [guid]::NewGuid().ToString('N')
     $staging = Join-Path $work $stamp
@@ -304,7 +305,7 @@ try {
     }
     Write-SetupJson (Join-Path $work 'files.json') @{ Repository = $repository; Commit = $sha; Files = $manifest.ToArray() }
     $state = [ordered]@{
-        InstallId = $stamp; SuiteVersion = '1.4.4'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
+        InstallId = $stamp; SuiteVersion = '1.4.5'; Commit = $sha; Stage = $Stage; StartedUtc = [datetime]::UtcNow.ToString('o')
         Completed = @(); Status = 'Running'; RestartRequired = $false; VisualCppPackageSha256 = $null
     }
     $state.Completed += 'VerifiedDownload'

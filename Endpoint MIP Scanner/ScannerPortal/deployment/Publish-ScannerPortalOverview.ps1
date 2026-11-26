@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.2.0
+.VERSION 0.3.0
 .GUID fbd56309-9178-4238-b5df-1fbba2b853c4
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.3.0 Managed discovery and reporting for explicitly selected Purview SITs.
 0.2.0 Refresh enabled snapshots after ingestion, preserving exclusions and detecting concurrent writes.
 0.1.0 Publish the executive reporting snapshot from accepted batch summaries.
 #>
@@ -80,7 +81,14 @@ try {
                 $group.observations += $entry.Files
             }
             if ($null -ne $report.ManagedInventory) {
-                $group.findings += $report.ManagedInventory.FilesWithMatches
+                $purview=$report.ManagedInventory.PSObject.Properties['Purview']
+                if ($purview) { $purview=$purview.Value }
+                if ($null -ne $purview) {
+                    $group.findings += $purview.FilesWithAnyFinding
+                    foreach ($type in $purview.Types) {
+                        if ($type.Matches) { $group.detections["Purview SIT / $($type.SitId)"] += [long]$type.Matches }
+                    }
+                } else { $group.findings += $report.ManagedInventory.FilesWithMatches }
                 foreach ($entry in $report.ManagedInventory.ByLocalRule) {
                     $group.detections["Local rule / $($entry.RuleId)"] += [long]$entry.Matches
                 }

@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 1.1.0
+.VERSION 1.2.0
 .GUID 90597121-8cef-4f5a-8319-8dcbc209e048
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+1.2.0 Managed discovery and reporting for explicitly selected Purview SITs.
 1.1.0 Preserve the scan session identity from the verified managed summary.
 2026-11-23 1.0.0 Validate and aggregate the managed inventory contract.
 #>
@@ -31,6 +32,9 @@ function Read-ManagedInventoryProjection($Directory, $Manifest, [guid]$TenantId,
     $auditEnabled=$summary.Contains('contentAudited')
     $extensions=@{}; $rules=@{}
     $counts=[ordered]@{InventoriedFiles=0;InventoryErrors=0;AnalyzedFiles=0;FilesWithMatches=0;AuditSkippedFiles=0;AuditErrors=0;ReusedFiles=0}
+    $types=@{}; $labels=@{}
+    $matchedPaths=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $pv=[ordered]@{Inspected=0;WithMatches=0;NoMatches=0;Unknown=0;Labeled=0;Unlabeled=0;LabelUnknown=0}
     $terminal=$null
     foreach ($line in [IO.File]::ReadLines((Join-Path $Directory 'records.jsonl'),[Text.Encoding]::UTF8)) {
         $event=ConvertFrom-Json -InputObject $line -AsHashtable
@@ -40,6 +44,41 @@ function Read-ManagedInventoryProjection($Directory, $Manifest, [guid]$TenantId,
                 if ($event.extension -cnotmatch '^\.[a-z0-9][a-z0-9+_-]{0,31}$') { throw 'Invalid inventory extension.' }
                 $extensions[$event.extension]++
                 $counts.InventoriedFiles++
+                if ($event.Contains('purview')) {
+                    $obs=$event.purview
+                    if ($obs.engine -cne 'PurviewInformationProtection' -or $obs.discovery -cnotin 'Matched','NoMatch','Error','NoResponse' -or
+                        $obs.labelRead -cnotin 'Labeled','Unlabeled','Error','NoResponse' -or $obs.findings -isnot [array] -or
+                        $obs.requested -isnot [array] -or $obs.requested.Count -lt 1 -or $obs.requested.Count -gt 16) { throw 'Invalid Purview observation.' }
+                    $pv.Inspected++
+                    foreach ($raw in $obs.requested) {
+                        $id=([guid]$raw).ToString()
+                        if (-not $types.ContainsKey($id)) { $types[$id]=[ordered]@{SitId=$id;Files=0;Matches=0L} }
+                    }
+                    if (($obs.discovery -ceq 'Matched') -ne ($obs.findings.Count -gt 0)) { throw 'Inconsistent Purview findings.' }
+                    switch ($obs.discovery) {
+                        'Matched' { $pv.WithMatches++; [void]$matchedPaths.Add([string]$event.path) }
+                        'NoMatch' { $pv.NoMatches++ }
+                        default { $pv.Unknown++ }
+                    }
+                    $seen=@{}
+                    foreach ($finding in $obs.findings) {
+                        $id=([guid]$finding.sitId).ToString()
+                        if ($id -notin $obs.requested -or $seen.ContainsKey($id) -or $finding.count -isnot [long] -or $finding.count -lt 1 -or
+                            $finding.confidence -isnot [long] -or $finding.confidence -lt 0 -or $finding.confidence -gt 100) { throw 'Invalid Purview SIT result.' }
+                        $seen[$id]=$true
+                        $types[$id].Files++; $types[$id].Matches += $finding.count
+                    }
+                    switch ($obs.labelRead) {
+                        'Labeled' {
+                            $id=([guid]$obs.labelId).ToString()
+                            if ($id -eq [guid]::Empty.ToString()) { throw 'Missing observed sensitivity label.' }
+                            $labels[$id]++; $pv.Labeled++
+                        }
+                        'Unlabeled' { $pv.Unlabeled++ }
+                        default { $pv.LabelUnknown++ }
+                    }
+                }
+
             }
             'error' { $counts.InventoryErrors++ }
             'summary' { $terminal=$event }
@@ -51,7 +90,7 @@ function Read-ManagedInventoryProjection($Directory, $Manifest, [guid]$TenantId,
                     'completed' {
                         $counts.AnalyzedFiles++
                         if ($event.matchesByRule -isnot [Collections.IDictionary]) { throw 'Invalid local rule matches.' }
-                        if ($event.matchesByRule.Count) { $counts.FilesWithMatches++ }
+                        if ($event.matchesByRule.Count) { $counts.FilesWithMatches++; [void]$matchedPaths.Add([string]$event.path) }
                         foreach ($rule in $event.matchesByRule.Keys) {
                             $matchCount=$event.matchesByRule[$rule]
                             if ($rule -notmatch '^[a-z0-9][a-z0-9_.-]{0,63}$' -or
@@ -96,7 +135,7 @@ function Read-ManagedInventoryProjection($Directory, $Manifest, [guid]$TenantId,
         }
         $identity[$column] = $value
     }
-    [ordered]@{
+    $projection=[ordered]@{
         RunIdentity=$identity
         Counts=$counts
         ByExtension=@($extensions.Keys | Sort-Object | ForEach-Object { [ordered]@{Extension=$_;Files=$extensions[$_]} })
@@ -108,4 +147,11 @@ function Read-ManagedInventoryProjection($Directory, $Manifest, [guid]$TenantId,
             ByLocalRule=@($rules.Keys | Sort-Object | ForEach-Object { $rules[$_] })
         }
     }
+    if ($pv.Inspected) {
+        $pv.Types=@($types.Keys | Sort-Object | ForEach-Object { $types[$_] })
+        $pv.Labels=@($labels.Keys | Sort-Object | ForEach-Object { [ordered]@{Id=$_;Files=$labels[$_]} })
+        $pv.FilesWithAnyFinding=$matchedPaths.Count
+        $projection.Inventory.Purview=$pv
+    }
+    return $projection
 }

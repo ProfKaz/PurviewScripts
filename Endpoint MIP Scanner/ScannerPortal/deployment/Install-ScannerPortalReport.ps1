@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.12.0
+.VERSION 0.13.0
 .GUID 7bb7b04d-f2b8-4d7d-8840-ec9a8972352b
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.13.0 Managed discovery and reporting for explicitly selected Purview SITs.
 0.12.0 Add fleet contact coverage for assigned agents.
 0.11.0 Install indexed scan identity columns and the run audit view.
 0.10.0 Install agent configuration editing and full rescan operations.
