@@ -1,8 +1,9 @@
 <#PSScriptInfo
-.VERSION 0.1.0
+.VERSION 0.2.0
 .GUID f2c7c7bb-5801-43c9-a3a2-a49aa39a9e77
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.2.0 Reconcile an incomplete observation against a complete baseline in memory.
 0.1.0 Compare two accepted single-cycle Purview inventories of the same scope.
 #>
 #requires -Version 7.4
@@ -12,7 +13,8 @@ param(
     [Parameter(Mandatory)][guid]$AcceptanceListId,
     [Parameter(Mandatory)][guid]$LandingListId,
     [Parameter(Mandatory)][int]$EarlierAcceptance,
-    [Parameter(Mandatory)][int]$LaterAcceptance
+    [Parameter(Mandatory)][int]$LaterAcceptance,
+    [switch]$PartialCycle
 )
 $ErrorActionPreference = 'Stop'
 
@@ -28,7 +30,7 @@ function Read-VerifiedText($Url, $Digest, $Length) {
     } finally { $stream.Dispose() }
 }
 
-function Read-Snapshot([int]$Id) {
+function Read-Snapshot([int]$Id, [bool]$AllowPartial) {
     $row = (Get-PnPListItem -List $AcceptanceListId -Id $Id -Connection $Connection).FieldValues
     $device = ([guid]$row.ReportingDeviceId).ToString()
     $run = $row.BatchId
@@ -51,8 +53,8 @@ function Read-Snapshot([int]$Id) {
     $summary = $wrapper.summary
     if ($wrapper.tenantId -ne $manifest.tenantId -or !$wrapper.tenantId -or $wrapper.registrationId -ne $device -or
         $wrapper.profileSha256 -notmatch '^[a-f0-9]{64}$' -or !$wrapper.executionAccountSid -or
-        $summary.runId -cne $run -or $summary.interrupted -or $summary.generationComplete -ne $true -or
-        $summary.generationHasErrors -ne $false -or $summary.resumedDirectories -ne 0 -or $summary.errors -ne 0) {
+        $summary.runId -cne $run -or $summary.interrupted -or $summary.generationComplete -isnot [bool] -or (!$AllowPartial -and ($summary.generationComplete -ne $true -or
+        $summary.generationHasErrors -ne $false -or $summary.resumedDirectories -ne 0 -or $summary.errors -ne 0))) {
         throw "Acceptance $Id requires a complete single-cycle inventory with known scope and zero coverage errors."
     }
     $paths = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -63,7 +65,7 @@ function Read-Snapshot([int]$Id) {
         $record = ConvertFrom-Json -InputObject $line -AsHashtable
         if ($terminal) { throw 'Unexpected data after the closing record.' }
         if ($record.event -eq 'summary') { $terminal = $record; continue }
-        if ($record.event -eq 'error') { throw 'Inventory contains a coverage error.' }
+        if (!$AllowPartial -and $record.event -eq 'error') { throw 'Inventory contains a coverage error.' }
         if ($record.event -ne 'file') { continue }
         if (!$record.path -or !$paths.TryAdd($record.path,[string]$record.purview.discovery)) {
             throw 'Missing or duplicate file path in a single inventory.'
@@ -74,17 +76,17 @@ function Read-Snapshot([int]$Id) {
             default { $unknown++ }
         }
     }
-    if ($terminal.runId -cne $run -or $paths.Count -ne $summary.inventoried -or $paths.Count -eq 0) {
+    if ($terminal.runId -cne $run -or $paths.Count -ne $summary.inventoried -or (!$AllowPartial -and $paths.Count -eq 0)) {
         throw "Incomplete or empty control inventory for acceptance $Id."
     }
     [pscustomobject]@{ Device=$device; Tenant=$wrapper.tenantId; Sid=$wrapper.executionAccountSid
         Profile=$wrapper.profileSha256; Run=$run; Started=[datetimeoffset]$summary.startedUtc
-        Paths=$paths; Matched=$matched; Unknown=$unknown }
+        Complete=$summary.generationComplete; Paths=$paths; Matched=$matched; Unknown=$unknown }
 }
 
 $libraryRoot = (Get-PnPList -Identity $LandingListId -Includes RootFolder -Connection $Connection).RootFolder.ServerRelativeUrl
-$first = Read-Snapshot $EarlierAcceptance
-$last = Read-Snapshot $LaterAcceptance
+$first = Read-Snapshot $EarlierAcceptance $false
+$last = Read-Snapshot $LaterAcceptance $PartialCycle.IsPresent
 if ($first.Device -ne $last.Device -or $first.Tenant -ne $last.Tenant -or $first.Sid -ne $last.Sid -or
     $first.Profile -ne $last.Profile -or $first.Run -eq $last.Run -or $first.Started -ge $last.Started) {
     throw 'Select distinct runs in chronological order with the same registration, account and profile.'
@@ -105,6 +107,23 @@ $result = [ordered]@{
     CurrentFiles=$last.Paths.Count; ReobservedPaths=$overlap; AddedPaths=$last.Paths.Count-$overlap
     MissingFromLatest=$first.Paths.Count-$overlap; ChangedDiscoveryStates=$changed
     CurrentFilesWithPurviewMatches=$last.Matched; CurrentDiscoveryUnknown=$last.Unknown
+}
+if ($PartialCycle) {
+    if ($last.Complete) { throw 'Select an incomplete later cycle for this comparison.' }
+    $retained = $first.Paths.Count - $overlap
+    $result.Test = 'CurrentInventory-PartialCycle'
+    $result.Outcome = if ($retained -gt 0) { 'Reconciled' } else { 'NoRetentionObserved' }
+    $result.CurrentFiles += $retained
+    $result.RetainedFromEarlier = $retained
+    $result.EarlierObservationUtc = $first.Started.ToUniversalTime().ToString('o')
+    foreach ($path in $first.Paths.Keys) {
+        if ($last.Paths.ContainsKey($path)) { continue }
+        switch ($first.Paths[$path]) {
+            'Matched' { $result.CurrentFilesWithPurviewMatches++ }
+            'NoMatch' { }
+            default { $result.CurrentDiscoveryUnknown++ }
+        }
+    }
 }
 Write-Host '=== CURRENT INVENTORY FOR SHARING ===' -ForegroundColor Magenta
 Write-Host ($result | ConvertTo-Json) -ForegroundColor Magenta
