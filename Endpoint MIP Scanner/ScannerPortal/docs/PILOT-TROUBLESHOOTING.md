@@ -199,3 +199,23 @@ foreach ($name in $tests) {
 ~~~
 
 Para reproducir autenticación y decisión de política seguir [M1–M5](../../LocalMIPScanner.WinPS51/README.md). Para fallo del bootstrap con DOCX etiquetado registrar separadamente Get-FileStatus y descubrimiento en un control conocido; compartir solo errores, GUID, contadores y confianza. Nunca interpretar una ejecución cuyo motor no arrancó como «sin datos sensibles».
+## Inventario por generación en el portal (web part 0.14.0)
+
+Ejecutar en PowerShell 7.4 o posterior, con PnP.PowerShell y la cuenta que conserva la carpeta Uploaded del agente. La cuenta del portal necesita lectura de Landing y escritura en ScannerPortalExecutive. Usar el script de la misma entrega que el instalador del portal.
+
+~~~powershell
+$site = 'https://mhcybersecuritydemos.sharepoint.com/sites/ScannerPortalPilot'
+$conn = Connect-PnPOnline -Url $site -ClientId 'f95bae44-e6ee-4673-a5e2-8fc1fb08cd64' -Interactive -ReturnConnection
+$params = @{
+    Connection = $conn
+    LandingListId = '0e82d3f5-3357-4f05-b604-049e13fb9491'
+    RunPrefix = '24bc025b72ee'
+    InterruptedRunId = 'f48aeea002294ddcb7848380ceffe293'
+    PublishGeneration = $true
+}
+& './ScannerPortal/Work/SharePointUpload/Get-WorkGenerationInventory.ps1' @params
+~~~
+
+La primera publicación devuelve Published después de releer el resumen. Con los mismos lotes la repetición devuelve Reused. En Consolidated inventory, usar Refresh generations y seleccionar el registro y la generación. Si aparece un conflicto de actualización, repetir el comando para incorporar el estado vigente. Si falta evidencia previamente publicada, recuperar los lotes de la misma generación antes de volver a publicar. Ante acceso denegado verificar el sitio, la identidad administrativa y los permisos de ScannerPortalExecutive.
+
+La vista refleja la última publicación explícita. El archivo generations.json contiene contadores, identificadores y huellas de los manifiestos. El grupo de rutas recuperadas usa el mismo alcance y la ventana de interrupción. Los resultados Purview se calculan sobre las rutas con resumen. Un cierre posterior puede coexistir con una discontinuidad anterior.

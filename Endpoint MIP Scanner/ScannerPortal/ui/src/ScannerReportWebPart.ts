@@ -8,6 +8,7 @@ import { parseAcceptanceIds, parseReport, Report } from './report';
 import { ReportView } from './ReportView';
 import { AgentSettings } from './AgentSettings';
 import { AgentConfigStore } from './agentConfig';
+import { GenerationInventory } from './GenerationInventory';
 import { FleetCoverage } from './FleetCoverage';
 import { RunAudit } from './RunAudit';
 import { ConfigurationView } from './ConfigurationView';
@@ -81,6 +82,7 @@ export default class ScannerReportWebPart extends BaseClientSideWebPart<ReportPr
             client:this.context.spHttpClient, web:this.context.pageContext.web.absoluteUrl, ledger:listId, openBatch:(id:number)=>{this.tab='Batch detail';this.select(listId,id);}
           })),
           React.createElement(PivotItem, { itemKey:'Consolidated inventory', headerText: 'Consolidated inventory' },
+            React.createElement(GenerationInventory, { client:this.context.spHttpClient, web:this.context.pageContext.web.absoluteUrl, relative:this.context.pageContext.web.serverRelativeUrl }),
             React.createElement(ConsolidatedView, { key: listId, load: this.loadCycles })),
           this.agents && React.createElement(PivotItem, { itemKey:'Agent management', headerText: 'Agent management' }, React.createElement(AgentSettings, {store: this.agents})),
           path && React.createElement(PivotItem, { itemKey:'Configuration', headerText: 'Configuration' },

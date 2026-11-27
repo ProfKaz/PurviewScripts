@@ -118,3 +118,6 @@ SP2/SP3 incorporan [enrolamiento con certificado público, perfiles versionados/
 ### Pendiente de diseño: históricos del piloto y vista de flota
 - Distinguir en Overview los registros con observaciones históricas, los agentes asignados y los agentes con señal reciente. Permitir excluir un registro histórico de la vista con un filtro reversible.
 - Para una eventual depuración, previsualizar el sitio, los registros, las fechas, los lotes y las proyecciones afectadas. Exigir dos confirmaciones independientes en la interfaz (revisión del alcance y confirmación escrita), autorización administrativa y auditoría. Definir recuperación, reconstrucción de agregados y comportamiento del receptor ante reintentos antes de habilitar el borrado.
+## Inventario consolidado por generación
+
+La versión 0.14.0 permite publicar el resumen de una generación con evidencia verificada en Landing y consultarlo en Consolidated inventory. La validación pendiente en el sitio piloto cubre publicación, lectura visual y repetición idempotente. El siguiente paso es generar estas proyecciones desde el receptor central, incluidos los ciclos interrumpidos, sin depender de los lotes conservados en el equipo. [Evidencia](PILOT-EVIDENCE.md) · [Comandos](PILOT-TROUBLESHOOTING.md).
