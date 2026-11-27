@@ -1,9 +1,10 @@
 <#PSScriptInfo
-.VERSION 1.0.1
+.VERSION 1.1.0
 .GUID ddfac335-a7c0-4110-aab4-540cc4eb826e
 .AUTHOR Kaz Demos / ProfKaz
 .COMPANYNAME Kaz Demos
 .RELEASENOTES
+1.1.0 Add a periodic activation opportunity while the user is signed in.
 2026-11-23 1.0.1 Use the verified console-free host for Program Files deployments.
 2026-11-20 1.0.0 User-scope enrollment and optional least-privilege scheduled task.
 #>
@@ -11,7 +12,7 @@
 .DESCRIPTION
 Creates a public enrollment request. Repeat with RegisterTask after administrative approval.
 .NOTES
-Version     : 1.0.1
+Version     : 1.1.0
 Tracking ID : ddfac335-a7c0-4110-aab4-540cc4eb826e
 #>
 #Requires -Version 5.1
@@ -47,10 +48,11 @@ if ($RegisterTask) {
     $action=New-ScheduledTaskAction -Execute $exe -Argument $arguments
     $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     $principal=New-ScheduledTaskPrincipal -UserId $sid -LogonType Interactive -RunLevel Limited
-    $trigger=New-ScheduledTaskTrigger -AtLogOn -User $sid
+    $logon=New-ScheduledTaskTrigger -AtLogOn -User $sid
+    $recovery=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(15) -RepetitionInterval (New-TimeSpan -Minutes 15)
     $settings=New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit ([timespan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable
     $name='EndpointMIPScanner-' + $enrollment.RegistrationId
-    $null=Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Trigger $trigger -Settings $settings -Description 'Kaz Demos: authenticated profile pull and verified inventory reports.' -Force
+    $null=Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Trigger @($logon,$recovery) -Settings $settings -Description 'Kaz Demos: authenticated profile pull and verified inventory reports.' -Force
     $enrollment | Add-Member TaskName $name
     $enrollment | Add-Member TaskStarted $false
 }
