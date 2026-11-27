@@ -18,6 +18,7 @@ export function GenerationInventory({ client, web, relative }: {client: SPHttpCl
   const [selected,select] = React.useState('');
   const [error,setError] = React.useState('');
   const [revision,reload] = React.useState(0);
+  const key = (row:Snapshot):string => row.registration+'/'+row.generation;
   React.useEffect(() => {
     let active = true;
     setError(''); setRows(undefined);
@@ -36,18 +37,23 @@ export function GenerationInventory({ client, web, relative }: {client: SPHttpCl
       }
       return data.generations;
     }
-    read().then(value=>{if(active)setRows(value);}).catch(()=>{if(active)setError('Could not read the generation summary. Check access and publication.');});
+    read().then(value=>{if(active){ select(current => value.some(r=>key(r)===current) ? current : value.length ? key(value[0]) : ''); setRows(value); }}).catch(()=>{if(active)setError('Could not read the generation summary. Check access and publication.');});
     return ()=>{active=false;};
   },[client,web,relative,revision]);
-  const key = (row:Snapshot):string => row.registration+'/'+row.generation;
   const row = rows?.find(r=>key(r)===selected) || rows?.[0];
   return <section><h3>Generation inventory</h3>
     <button onClick={()=>reload(revision+1)}>Refresh generations</button>
     {error ? <MessageBar messageBarType={MessageBarType.error}>{error}</MessageBar> : !rows ? <Spinner label="Loading generations"/> :
       !row ? <p>No generation summaries available.</p> : <>
-        <label> Published generation <select value={key(row)} onChange={e=>select(e.target.value)}>
-          {rows.map(r=><option key={key(r)} value={key(r)}>{r.registration} · {r.generation}</option>)}
-        </select></label>
+        <p><label>Device registration <select style={{maxWidth:'100%'}} value={row.registration} onChange={e=>{
+          const first=rows.find(r=>r.registration===e.target.value);
+          if(first) select(key(first));
+        }}>
+          {Array.from(new Set(rows.map(r=>r.registration))).map(id=><option key={id} value={id}>{id}</option>)}
+        </select></label></p>
+        <p><label>Published generation <select style={{maxWidth:'100%'}} value={key(row)} onChange={e=>select(e.target.value)}>
+          {rows.filter(r=>r.registration===row.registration).map(r=><option key={key(r)} value={key(r)}>{r.generation}</option>)}
+        </select></label></p>
         <p>{row.profile} · {row.version} · Coverage: <strong>{coverage[row.coverage]}</strong></p>
         <div className={styles.metrics}>
           <div><strong>{row.combined.toLocaleString('en-US')}</strong>Distinct paths observed</div>

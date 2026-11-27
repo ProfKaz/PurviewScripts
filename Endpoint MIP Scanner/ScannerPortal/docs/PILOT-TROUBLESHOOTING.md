@@ -219,3 +219,9 @@ $params = @{
 La primera publicación devuelve Published después de releer el resumen. Con los mismos lotes la repetición devuelve Reused. En Consolidated inventory, usar Refresh generations y seleccionar el registro y la generación. Si aparece un conflicto de actualización, repetir el comando para incorporar el estado vigente. Si falta evidencia previamente publicada, recuperar los lotes de la misma generación antes de volver a publicar. Ante acceso denegado verificar el sitio, la identidad administrativa y los permisos de ScannerPortalExecutive.
 
 La vista refleja la última publicación explícita. El archivo generations.json contiene contadores, identificadores y huellas de los manifiestos. El grupo de rutas recuperadas usa el mismo alcance y la ventana de interrupción. Los resultados Purview se calculan sobre las rutas con resumen. Un cierre posterior puede coexistir con una discontinuidad anterior.
+
+### Selección de equipo y generación en 0.14.1
+
+En Consolidated inventory, elegir Device registration y después Published generation. La segunda lista muestra las generaciones publicadas para ese registro. Refresh generations vuelve a leer el catálogo y conserva la selección mientras siga disponible. Los ciclos del listado inferior proceden de las aceptaciones recientes y pueden corresponder a otros registros.
+
+En el piloto se verificó visualmente en 0.14.0 la generación con 293 rutas distintas, 6 recuperadas y 46 directorios en la discontinuidad. La actualización de la vista a 0.14.1 usa ese mismo catálogo.
