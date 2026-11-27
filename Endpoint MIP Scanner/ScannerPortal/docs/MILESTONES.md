@@ -43,7 +43,7 @@ El piloto 0.13.0.0 / 1.4.5 incorpora selección explícita de SIT por GUID, lect
 
 ## Corte de ejecución del 27 de noviembre de 2026
 
-El [registro de pruebas](PILOT-EVIDENCE.md) y el [runbook](PILOT-TROUBLESHOOTING.md) documentan los dos agentes. El milestone 3 tiene evidencia local de 293 rutas observadas, seis recuperadas y un salto de 46 directorios. Se habilitó la comparación de los insumos con Landing. La aceptación remota y la nueva vista SPFx están pendientes.
+El [registro de pruebas](PILOT-EVIDENCE.md) y el [runbook](PILOT-TROUBLESHOOTING.md) documentan los dos agentes. En el milestone 3 se verificaron los hashes de 33 archivos de 11 lotes en Landing. Respaldan 293 rutas observadas, seis recuperadas y un salto de 46 directorios. La salida del piloto continúa en CheckpointGap, sin cierre. El próximo criterio es persistir la proyección central por registro, perfil y generación, comprobar su idempotencia y exponerla en SPFx.
 
 ## Próximas entregas del piloto (25 de noviembre de 2026)
 
