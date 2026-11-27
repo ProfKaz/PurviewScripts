@@ -1,6 +1,6 @@
 # Integración de informes locales con ScannerPortal
 
-Estado: diseño y backlog. La implementación y la validación del tenant quedan pendientes.
+Diseño de evolución para un receptor HTTPS. Para la ingesta directa a Landing ya validada en el piloto E3, ver [resultados de transporte y recepción](PILOT-EVIDENCE.md) y [diagnóstico operativo](PILOT-TROUBLESHOOTING.md).
 
 ## Flujo propuesto
 

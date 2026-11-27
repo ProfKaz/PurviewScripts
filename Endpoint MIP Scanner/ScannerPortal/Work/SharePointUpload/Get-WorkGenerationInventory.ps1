@@ -1,19 +1,35 @@
 <#PSScriptInfo
-.VERSION 0.2.0
+.VERSION 0.3.0
 .GUID 2fa67369-33e7-442c-8a61-bdf80f52860f
 .AUTHOR Kaz Demos / ProfKaz
 .RELEASENOTES
+0.3.0 Independently read back SharePoint Landing files for the compared cycles.
 0.2.0 Compare explicitly identified interrupted evidence within a bounded checkpoint gap.
 0.1.0 Reconcile locally retained uploaded cycles of one managed generation.
 #>
 #requires -Version 5.1
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName='Local')]
 param(
-    [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{12,32}$')][string]$RunPrefix,
+    [Parameter(Mandatory,ParameterSetName='Local')][Parameter(Mandatory,ParameterSetName='SharePoint')][ValidatePattern('^[0-9a-f]{12,32}$')][string]$RunPrefix,
     [ValidatePattern('^[0-9a-f]{32}$')][string]$InterruptedRunId,
-    [string]$UploadedDirectory = (Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner\ManagedEndpoint\outbox\Uploaded')
+    [string]$UploadedDirectory = (Join-Path $env:LOCALAPPDATA 'EndpointMIPScanner\ManagedEndpoint\outbox\Uploaded'),
+    [Parameter(Mandatory,ParameterSetName='SharePoint')]$Connection,
+    [Parameter(Mandatory,ParameterSetName='SharePoint')][guid]$LandingListId
 )
 $ErrorActionPreference = 'Stop'
+if ($PSCmdlet.ParameterSetName -eq 'SharePoint') {
+    $library = Get-PnPList -Connection $Connection -Identity $LandingListId -Includes RootFolder
+    if ($library.Id -ne $LandingListId -or !$library.RootFolder.ServerRelativeUrl) { throw 'Unexpected landing library.' }
+    $remoteRoot = $library.RootFolder.ServerRelativeUrl.TrimEnd('/')
+}
+function Test-LandingDigest([string]$Folder,[string]$Name,[string]$Expected) {
+    $stream = Get-PnPFile -Connection $Connection -Url "$Folder/$Name" -AsMemoryStream -ErrorAction Stop
+    try {
+        $stream.Position = 0
+        $actual = (Get-FileHash -InputStream $stream -Algorithm SHA256).Hash
+        if ($actual -ine $Expected) { throw "Remote $Name differs from the verified local batch." }
+    } finally { $stream.Dispose() }
+}
 function Read-JsonFile($Path) {
     ConvertFrom-Json -InputObject ([IO.File]::ReadAllText($Path))
 }
@@ -25,6 +41,7 @@ $generation = $anchor.summary.generation
 if ($generation -notmatch '^[a-f0-9]{32}$' -or !$anchor.executionAccountSid -or !$anchor.registrationId -or
     $anchor.profileSha256 -notmatch '^[a-f0-9]{64}$') { throw 'Incomplete anchor generation identity.' }
 $interruptedCycle = $null
+$verifiedRemote = 0
 $cycles = @(foreach ($dir in $dirs) {
     $wrapper = Read-JsonFile (Join-Path $dir.FullName 'summary.json')
     $s = $wrapper.summary
@@ -47,12 +64,19 @@ $cycles = @(foreach ($dir in $dirs) {
     if ($manifest.contract -ne 'ScannerPortal.InventoryRun/1' -or $manifest.batchId -ne $dir.Name -or
         $manifest.registrationId -ne $wrapper.registrationId -or $manifest.tenantId -ne $wrapper.tenantId -or
         $manifest.files.Count -ne 2) { throw 'Unexpected managed manifest.' }
+    if ($PSCmdlet.ParameterSetName -eq 'SharePoint') {
+        $device = ([guid]$wrapper.registrationId).ToString()
+        $remote = "$remoteRoot/devices/$device/batches/$($dir.Name)"
+        Test-LandingDigest $remote 'manifest.json' $receipt.manifestSha256
+    }
     foreach ($name in 'summary.json','records.jsonl') {
         $entry = @($manifest.files | Where-Object name -CEQ $name)
         $file = Get-Item -LiteralPath (Join-Path $dir.FullName $name)
         if ($entry.Count -ne 1 -or $file.Length -ne $entry[0].length -or
             (Get-FileHash -LiteralPath $file.FullName).Hash -ne $entry[0].sha256) { throw "Invalid $name payload." }
+        if ($PSCmdlet.ParameterSetName -eq 'SharePoint') { Test-LandingDigest $remote $name $entry[0].sha256 }
     }
+    if ($PSCmdlet.ParameterSetName -eq 'SharePoint') { $verifiedRemote++ }
     $cycleInfo = [pscustomobject]@{ Summary=$s; Directory=$dir.FullName; Offset=[long]$s.resumedDirectories; Started=[datetimeoffset]$s.startedUtc }
     if ($candidate) { $interruptedCycle = $cycleInfo } else { $cycleInfo }
 })
@@ -122,6 +146,12 @@ $result = [pscustomobject]@{
     CoverageErrors=$coverageErrors
 }
 if ($InterruptedRunId) { $result | Add-Member NoteProperty InterruptedEvidence $comparison }
+if ($PSCmdlet.ParameterSetName -eq 'SharePoint') {
+    $result | Add-Member NoteProperty LandingReadback ([pscustomobject]@{
+        ListId=$LandingListId; VerifiedBatches=$verifiedRemote; VerifiedFiles=3*$verifiedRemote
+        Scope='LocallyRetainedComparedBatches'; Outcome='HashesVerified'
+    })
+}
 Write-Host '=== GENERATION INVENTORY FOR SHARING ===' -ForegroundColor Magenta
 Write-Host ($result | ConvertTo-Json -Depth 4) -ForegroundColor Magenta
 $result

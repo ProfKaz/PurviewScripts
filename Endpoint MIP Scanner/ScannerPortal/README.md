@@ -1,6 +1,6 @@
-﻿> Pista Work independiente: [subida básica de lotes existentes a SharePoint](Work/SharePointUpload/README.md). Empezar por W01 local; no requiere repetir ControlPlane ni enrolar certificados por equipo.
+> Pista Work independiente: [subida básica de lotes existentes a SharePoint](Work/SharePointUpload/README.md). Empezar por W01 local; no requiere repetir ControlPlane ni enrolar certificados por equipo.
 
-> Piloto administrado 1.0: [certificados, perfiles y entrega de informes](docs/MANAGED-ENDPOINTS.md). Administración mediante scripts; interfaz SPFx y aceptación/proyecciones centrales pendientes.
+> Piloto administrado 1.0: [certificados, perfiles y entrega de informes](docs/MANAGED-ENDPOINTS.md). El editor de perfiles y los reportes por aceptación están operativos en SPFx.
 
 > Revisión de arquitectura del 20 de noviembre de 2026: [alcance del portal, identidades, configuración e ingesta](docs/PORTAL-FOCUS-2026-11.md). Propuesta documental separada del publicador; base Microsoft 365 E3 sin servicios Azure adicionales.
 
@@ -12,7 +12,7 @@ Portal unificado de configuración, descubrimiento y actividades del scanner ofi
 
 ## Estado de esta entrega
 
-10 de noviembre de 2026. **SP0 completado: diagnóstico y arquitectura. SP1 iniciado: contratos y filtrado de referencia con pruebas offline.** No hay todavía un paquete SPFx ni un portal desplegado. No se modificaron la instalación local ni la tarea de Activity Explorer en ejecución.
+Actualización del 27 de noviembre de 2026. El piloto E3 usa dos agentes, un receptor en Windows y el web part 0.13.2. El [registro de pruebas](docs/PILOT-EVIDENCE.md) identifica la evidencia por fase y las limitaciones. El [runbook diagnóstico](docs/PILOT-TROUBLESHOOTING.md) contiene los comandos por síntoma.
 
 | Documento | Propósito |
 | --- | --- |

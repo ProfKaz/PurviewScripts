@@ -1,8 +1,10 @@
 # Plan de validación integral — LocalMIPScanner y ScannerPortal
 
-Estado: plan propuesto. Las pruebas siguientes están pendientes hasta disponer de evidencia del piloto. Este documento fija el objetivo y el orden de validación; los cambios de contrato se versionan.
+Actualizado el 27 de noviembre de 2026. La [matriz de ejecución T00–T14 y cronología M1–W08](PILOT-EVIDENCE.md) registra qué se probó y qué sigue abierto. Los [comandos de diagnóstico](PILOT-TROUBLESHOOTING.md) corresponden al piloto desplegado. La batería de esta página conserva los criterios originales para detectar brechas.
 
-## Objetivo final y arquitectura de referencia
+## Arquitectura desplegada y alternativa de evolución
+
+El piloto E3 usa subida directa app-only a Landing, receptor programado en Windows y proyecciones en SharePoint. El diseño HTTPS/Azure y la estructura particionada descritos a continuación son una alternativa futura que requeriría otros recursos y validación de costes.
 
 Los agentes Windows PowerShell 5.1 inventarían y analizan archivos según un perfil versionado, conservan resultados offline y entregan lotes idempotentes a un receptor HTTPS autenticado. La identidad central escribe en una biblioteca restringida de SharePoint Online. El portal muestra estado actual, historial y cobertura. Una ausencia en Purview no elimina el resultado local.
 

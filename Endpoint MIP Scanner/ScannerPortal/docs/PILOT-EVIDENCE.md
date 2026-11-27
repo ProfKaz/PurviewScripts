@@ -1,0 +1,70 @@
+# Evidencia del piloto y reproducción de resultados
+
+Corte del 27 de noviembre de 2026. La evidencia de Microsoft 365 procede de las salidas compartidas por el operador y de sus comprobaciones visuales. Las pruebas con datos sintéticos o servicios simulados se identifican por separado. Los identificadores de aceptación son locales a la lista del sitio piloto. En otro tenant se debe buscar por registro y RunId.
+
+## Qué se instaló
+
+El objetivo probado es Microsoft 365 E3 con SharePoint Online, sin suscripción Azure adicional, ADX ni base de datos externa. Los archivos de trabajo y la cola residen en disco. El agente se instala una vez en Program Files con elevación; después trabaja con la cuenta interactiva, token limitado y certificado en CurrentUser. Al cerrar sesión deja de escanear. La tarea del receptor es independiente: LOCAL SERVICE, PowerShell 7 y certificado de máquina. El editor y las vistas del portal están en inglés. El modelo de permisos de la app compartida no acredita aislamiento entre emisores. Ocultar una biblioteca tampoco sustituye sus ACL.
+
+| Componente | Versión y alcance de la evidencia |
+| --- | --- |
+| Endpoint | Suite 1.4.3 reanudó el journal anterior. 1.4.4 comunicó versión y heartbeat. 1.4.5 añadió selección explícita de SIT y lectura de etiqueta. 1.4.6 incorpora reactivación periódica; en Priya se probó el disparador sobre la tarea existente, sin acreditar cambio de binarios. |
+| Portal | SPFx 0.13.2 visible; 0.13.1 añadió selección del último lote y apertura desde Run audit. Instalador PS7.4+ y PnP.PowerShell 3.2.0. |
+| Identidades | MIP delegado para política del usuario, app administrativa para instalación, app de endpoint para subir a Landing y leer Config, y receptor con identidad propia. El piloto W02–W05 utilizó además un publicador con certificado de CurrentUser. |
+| Contratos | Lote histórico sellado con cuatro archivos. Lote administrado ScannerPortal.InventoryRun/1 con records.jsonl, summary.json y manifest.json. delivery.json es un recibo local. UploadedVerified acredita transporte; la aceptación y la proyección del portal se verifican aparte. |
+
+## Resultados cronológicos
+
+| Fase | Operación y resultado observado | Límite o regresión que vigilar |
+| --- | --- | --- |
+| M1–M2.1 | En Windows PowerShell 5.1 x64 pasaron Test-StateFormat, Test-Inventory, Test-Incremental, Test-Checkpoint y Test-Restart. Se probaron extensiones, exclusiones, estado incremental y reanudación. | Inventariar con los permisos reales. Registrar directorios inaccesibles y conservar el índice. |
+| M3 | Test-ContentAudit pasó. Sobre TXT positivo: 1 analizado, 1 con coincidencia; segunda pasada: 0 analizados y 1 reutilizado. El SDK recibió el SIT mapeado y RecommendLabel. | Separar regex local, SIT solicitado por política, hallazgo del motor nativo y recomendación. |
+| M4 | Se verificaron etiquetas en copias DOCX, XLSX y PPTX; verified y sourceUnchanged verdaderos, protectionApplied falso. | La prueba autorizó copias con una etiqueta sin protección. La automatización de cambios y fallos de etiqueta sigue pendiente. |
+| M5 | Test-Measurement y SDK-SelfTest pasaron. SSO windowsSilent autenticó, cargó 7 etiquetas publicadas y 2 paquetes de reglas. Dos mediciones de inventario: 1196–1398 ms; auditoría: 1229–1284 ms. Memoria pico de las cuatro pruebas: 188–213 MiB aprox. | Mediciones de un piloto pequeño. No extrapolar rendimiento ni cobertura a una flota. |
+| M6 | Etiquetado por PowerShell/Office generó eventos; Advanced Hunting identificó PowerShell en algunos registros. Con cliente 3.2.92.0 la telemetría resultó inconsistente y con 3.2.181.0 el operador dejó de observarla en esas pruebas. El App ID observado no quedó vinculado a las apps revisadas. | No atribuir automáticamente al usuario o aplicación. Capturar ejecución UTC, proceso y origen. Las cuatro actividades deseadas siguen siendo un objetivo de reportería. |
+| Descubrimiento amplio | Lote tras reintentos: 2293 candidatos, 1814 con respuesta, 479 sin respuesta, 194 con hallazgos, 13 errores de cobertura, 2 reintentos aplicados y 98 tipos detectados. De 479 sin respuesta, 472 estaban en AppData Local. Copias idénticas en Deploy de dos controles sí devolvieron Skipped. | Respuesta vacía, archivo omitido, error de lectura y cero coincidencias son estados distintos. Dos CSV con rutas mal decodificadas dieron PathNotFound antes del reintento. |
+| W01–W03C | Inventario local sin elevación, inventario delegado de Entra, creación del publicador y token app-only por certificado. El administrador identificó Landing, concedió write de lista seleccionada y leyó la concesión. El publicador leyó Landing y recibió 403 en Config con esa identidad. | La app de agente administrado posterior sí necesita lectura en Config. No extender permisos de la app MIP para corregir un 403. |
+| W04–W05F | Marcador sintético subido y verificado por SHA-256. Repetición: cero carpetas/archivos nuevos. Revisión de ACL, denegación a usuario ordinario, verificación local, preparación de destino por dispositivo y revisión de herencia. Carga real: 4/4 hashes remotos, manifiesto publicado al final; repetición: 0 subidos y 4 verificados. | Mantener PendingUpload local distinguido del recibo de transporte. La verificación de hash se hizo sobre bytes descargados. |
+| W06A–E | Recepción independiente y repetida; lista ScannerPortalAcceptance restringida con clave única. El publicador recibió 403 en esa lista. Aceptación #1 creada y reutilizada; proyección almacenada y releída con totales 2293 por extensión y resultado. Repetición W06D: Reused. | Un error de Disconnect-PnPOnline al finalizar W06E fue posterior a la verificación. Con PnP 3.2.0 no usar el parámetro Connection en Disconnect si esa firma carece de él. |
+| W07 | Página restringida: administrador ve los números, usuario ordinario denegado por página y API. Paquete SPFx instalado en catálogo de sitio; segundo lote sintético #2 visible junto a #1. Configuración, navegación por aceptación y versión al pie probadas en sucesivas versiones. | El catálogo del tenant debe estar inicializado; comprobar por separado el del sitio. v0.13.0 mostraba el lote histórico; v0.13.2 volvió a verse tras recargar sin reinstalar. |
+| W08A–B | Tarea Interactive/Limited conservó SID y perfil; archivo accesible enumerado, carpeta restringida registrada. SDK silencioso obtuvo la política. Perfil pausado 1.0.0 generado y leído desde Config con el mismo SHA-256. Editor probado por el administrador. | Ante Access denied en creación de carpetas comprobar raíz real de la biblioteca, identidad y permisos efectivos. |
+| Segundo equipo | Priya enrolada y aprobada. Perfil 1.0.0 recibido del portal y recuperado de caché tras WebException simulada. Perfil activo 1.0.1 incluyó TXT y omitió .log y carpeta excluida. Rollback a 1.0.0 pausó el agente al siguiente ciclo. #3 visible, agente denegado en Acceptance. | El ensayo de caché probó sincronización offline. Recuperación completa de cola ante caída de red prolongada pendiente. |
+| Unidad C e incremental | Priya 1.0.2: #4 registró 384 archivos, 316 analizados, 17 con hallazgos locales, 54 omitidos, 14 errores de auditoría y 1 de cobertura. Positivo detectó tarjeta, ABA y SWIFT; negativo sin coincidencia. Cambio de ámbito del journal corregido con 1.4.3: reanudó 4148 directorios. #6 corresponde al tramo intermedio y #5 al cierre. | Ordenar por generación y checkpoint. El orden de ingestión puede diferir del orden de ejecución. Reutilización puede dar cero hallazgos nuevos en un ciclo. |
+| Rescan, auditoría y flota | Rescan desde cero: #204 sin reutilización; #205 cierre con errores. Desde Agent management se observó otra generación completa con errores (#282–283). #287 mostró equipo, cuenta y SID; #286 tenía Unknown. Filtros y heartbeat de Priya validados. | Tres identidades históricas incluyen el registro previo del mismo equipo. Usar asignaciones y último contacto para contar agentes actuales. |
+| Purview efectivo | Priya cargó política con dos callbacks: tarjeta solicitada; ABA y SWIFT ausentes de esa sonda. Un DOCX etiquetado devolvió error de bootstrap al leer etiqueta, pero el descubrimiento identificó Credit Card Number, cuenta 1, confianza 85. En #403 y #406 se observaron las mismas dos rutas; cuatro observaciones históricas, dos archivos vigentes del control, uno con coincidencia. #511 cerró un ciclo de Priya. | El diagnóstico de Office, la lectura de etiqueta y la clasificación de contenido tienen resultados independientes. El control no acredita un catálogo dinámico completo. |
+| Sebastián | Instalación como segundo agente limitado; #420 aceptado, 0 archivos y 1 error de inventario en la raíz de Documentos. Cambio central a C: y perfil 1.0.1795724960570; #507 parcial: 13 archivos, 6 evaluados sin coincidencia, 7 desconocidos. | La recepción funciona aun si la ruta es inaccesible. No atribuir los 7 desconocidos a ausencia de datos sensibles. |
+
+### Generación interrumpida y recuperación de la tarea
+
+- Generación de Sebastián `a569e401f8074cc086fec251e3b41c2f`. Diez ciclos subidos con resumen, 287 rutas distintas y cero repeticiones. Purview: 9 con coincidencia, 269 sin coincidencia, 9 desconocidas. A la fecha de la muestra no se encontró el ciclo de cierre. Cobertura de la generación: **CheckpointGap**.
+- Después de #507, RunId `24bc025b72ee460cb45883a0dfe268f8`, se esperaba el contador 623. El RunId `a02a484bda234776aa04e86e9275de95` retomó en 669. Diferencia: **46 directorios**. No permite inferir cuántos archivos faltan.
+- El ciclo `f48aeea002294ddcb7848380ceffe293` empezó a las 21:10:08 UTC del 26/11. PowerShell terminó aproximadamente 47 s después. Su lote Uploaded/PartialInterruptedRun carece de resumen final y de generación explícita. Coinciden registro, SID, perfil y ventana entre checkpoints. Seis filas legibles, seis rutas únicas, cero solapamientos con las 287. **293 rutas observadas combinadas**. Los totales Purview anteriores corresponden solo a las 287. La comparación fue local sobre lotes retenidos; aceptación del lote interrumpido por el receptor no acreditada.
+- Sebastián: Application Error 1000 y Task Scheduler 201 coinciden en menos de 4 s con código 3221226505 (0xC0000409). En Priya se observó el mismo error en powershell.exe, sin evento equivalente de la tarea en esa ventana. Módulo desconocido en ambos; causa abierta.
+- En Priya se añadió PT15M a su tarea Interactive/Limited con IgnoreNew y se observó Ready, luego Running, con carga verificada de los RunId `fdc72278097c4f4fbe0a9c19e6a77cf8` y `a564ee0a9e3e4e1faf5528de6df0cb8f`. El arranque automático queda condicionado a que no haya intervenido un operador. No se probó el mismo cambio en el agente de Sebastián.
+
+## Correspondencia con el plan T00–T14
+
+| Caso | Estado del criterio original y evidencia pendiente |
+| --- | --- |
+| T00 | Parcial. Versiones y arquitectura E3 identificadas. Faltan SLO y umbrales de capacidad acordados. |
+| T01 | Inventario y concesiones del piloto SPO comprobados en W02/W03. |
+| T02 | Parcial. Grant, marcador y aceptación idempotentes. Aprovisionamiento limpio de extremo a extremo y rollback global pendientes. |
+| T03 | Parcial. W03C/W05 y lista de aceptación denegada; faltan matriz por rol, aislamiento entre emisores y pruebas entre tenants. |
+| T04 | Verificado para los controles y lotes descritos en M3, W05C y W07D1. |
+| T05 | Transporte y aceptación de los lotes W05F–W06D verificados. Acuse de ingestión consumido por el agente pendiente. |
+| T06 | Parcial. Caché comprobada; falta el ciclo offline completo con reconexión y reinicio. |
+| T07 | Parcial. Repeticiones sin duplicados y recuperación de evidencia comprobadas; queda un salto de checkpoint. |
+| T08 | Parcial. Hash alterado rechazado en prueba local. Falta campaña integrada 429/503, expiración, cuota y recuperación. |
+| T09 | Parcial. Dos equipos y dos usuarios reportan; falta matriz multiusuario en un equipo, cambio de UPN y múltiples equipos por cuenta. |
+| T10 | Parcial. Incremental, rescan y conteo por ruta verificados. Faltan generación con bajas, renombres, antigüedad y conciliación central automatizada. |
+| T11 | Parcial. Etiquetado en copias y descubrimiento nativo demostrados. Falta atribución extremo a extremo de cambios y fallos de etiqueta. |
+| T12 | Parcial. Reportes por aceptación, overview histórico y filtros probados. Proyección de inventario vigente y filtros cruzados siguen abiertos. |
+| T13 | Parcial. Instalación, sincronización, pausa, actualización y reactivación probadas en el alcance indicado. Pendientes rotación, revocación y rollout masivo. |
+| T14 | Pendiente. Las mediciones M5 y la unidad C son referencias de un equipo. Falta carga concurrente representativa. |
+
+## Próxima entrega y criterio de aceptación
+
+1. Comparar los lotes retenidos con sus bytes en Landing desde la cuenta administrativa. Seguir el [procedimiento de diagnóstico](PILOT-TROUBLESHOOTING.md#comparar-la-generación-con-sharepoint). Con la misma muestra se esperan **11 lotes y 33 archivos verificados**: diez ciclos más el lote interrumpido, tres archivos remotos por lote. Si se reciben ciclos nuevos, registrar los nuevos contadores y sus IDs.
+2. Persistir en el receptor una proyección por registro, perfil y generación. Vincular manifiestos y procedencia de la evidencia recuperada. La relectura de los mismos insumos debe reutilizar el resultado; una recepción fuera de orden debe poder recalcularlo.
+3. Exponer en inglés las rutas observadas, rutas adicionales recuperadas, último ciclo y cobertura. Validar con la muestra: **293 distinct paths observed**, **6 recovered from interrupted run**, **Checkpoint gap**. El cierre y los errores de enumeración tienen indicadores independientes. No convertir estas observaciones en inventario completo ni sumarlas a los contadores de coincidencias sin conciliar el estado por archivo.
+4. Verificar lectura autorizada y denegada, actualización idempotente, falta de manifiesto, hash distinto y un lote de otro registro. El web part del piloto sigue siendo 0.13.2 hasta publicar y comprobar la nueva vista en el tenant.

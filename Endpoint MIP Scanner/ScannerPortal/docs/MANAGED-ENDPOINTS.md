@@ -4,7 +4,7 @@
 
 El instalador único 1.3.0 descarga el paquete completo, con etapas ControlPlane y ManagedEndpoint independientes del SDK. Reutiliza el sitio/Foundation existentes. El administrador prepara una app dedicada, aprueba certificados públicos y publica/asigna perfiles. El endpoint PS5.1 consulta la asignación, valida y materializa los cinco JSON del scanner, ejecuta ciclos limitados, conserva informes y verifica cargas mediante descarga y SHA-256. No requiere elevación local ni distribuye secretos o claves privadas. Los módulos Graph/PnP solo se instalan en el equipo administrativo; el endpoint usa PowerShell/.NET integrados.
 
-La administración de perfiles se realiza mediante scripts y bibliotecas SharePoint en esta entrega; todavía no hay editor SPFx. La interfaz de reportes, el procesador central de aceptación/proyecciones, la retención automática y la clasificación/etiquetado SDK integrados en este runner siguen pendientes. No se presentan como implementados por disponer ya del transporte. El laboratorio SDK anterior permanece independiente.
+Estado al 27 de noviembre: Agent management publica perfiles, la tarea del receptor procesa lotes y el portal muestra aceptación, identidad y cobertura. [Resultados y pendientes](PILOT-EVIDENCE.md).
 
 ## Identidad y límite de confianza
 
@@ -12,7 +12,7 @@ La administración de perfiles se realiza mediante scripts y bibliotecas SharePo
 - Permiso de aplicación Graph Lists.SelectedOperations.Selected; grant read a ScannerPortalConfig y write a ScannerPortalLanding. No Sites.ReadWrite.All, secretos de cliente ni permisos administrativos en endpoints.
 - Cada estación/cuenta genera un certificado RSA CurrentUser no exportable y un GUID de registro. Envía solo el DER público en una solicitud que un operador aprueba. El endpoint confirma posesión de la clave cuando obtiene el token. La solicitud y el nombre del equipo no son atestación del dispositivo.
 - Todos los certificados de la misma app tienen los mismos permisos: pueden leer todos los perfiles y modificar la biblioteca de entrada, incluidos informes de otros registros. El parámetro AllowSharedIngress exige reconocerlo durante Initialize. Las carpetas separan organización de datos, no autorización por equipo. No colocar datos confidenciales de otros grupos ni evidencia final en esa biblioteca bajo este modelo.
-- El piloto valida este transporte compartido. No equivale a una solución contra modificación por endpoints comprometidos. Una biblioteca de evidencia aceptada necesita un procesador/identidad central y no recibe grant del endpoint. No hay recibo Accepted ni custodia central implementados todavía.
+- El piloto valida este transporte compartido. No equivale a una solución contra modificación por endpoints comprometidos. Una biblioteca de evidencia aceptada necesita un procesador/identidad central y no recibe grant del endpoint. Existe un registro central de aceptación protegido; el agente conserva su propio recibo de transporte.
 - La renovación, revocación individual de claves y capacidad de credenciales por aplicación se deben ensayar antes de despliegues masivos. No se promete un certificado por estación ilimitadamente en una única app. Las operaciones administrativas de credenciales deben serializarse desde el mismo directorio de estado; el bloqueo no es distribuido entre equipos administradores.
 
 ## Preparación y pruebas secuenciales
@@ -135,7 +135,7 @@ La instalación comprueba token y perfil antes de registrar. Crea EndpointMIPSca
 - Formato ScannerPortal.InventoryRun/1 con records.jsonl, summary.json y manifest.json. Es distinto del lote consolidado de descubrimiento nativo anterior: las colas y lotes antiguos no se modifican ni se suben automáticamente con un contrato equivocado.
 - Límite piloto de 64 MiB por archivo de informe y cuota local de 512 MiB del directorio administrado. Al alcanzar cuota se detiene el escaneo; no borra evidencias. Retención, compactación, subida por segmentos y limpieza de generaciones quedan posteriores. El estado incremental configurado fuera del directorio administrado no se contabiliza en esa cuota.
 - stateDirectory es una base; se añade registrationId y hash del ámbito. El runner excluye automáticamente su instalación y su directorio de datos para evitar reingerir sus informes.
-- El modo administrado actual audita reglas locales sobre TXT/CSV e inventaría las demás extensiones. No ejecuta clasificación oficial de todos los SIT ni aplica etiquetas. No se aceptan campos de etiquetado/ejecución desconocidos que aparenten habilitar esas capacidades.
+- El perfil admite auditoría local TXT/CSV y descubrimiento Purview mediante purviewSitIds. Lectura de etiqueta, detección de SIT y reglas locales se registran por separado. La aplicación automática de etiquetas por el agente administrado sigue pendiente.
 - El cliente consulta cada idleSeconds después de un ciclo acotado por maxSeconds. Es pull con consistencia eventual; no hay push ni efecto inmediato sobre un equipo desconectado.
 
 ## Pruebas y pendientes

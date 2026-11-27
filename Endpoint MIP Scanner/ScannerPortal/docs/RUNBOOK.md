@@ -1,6 +1,6 @@
 # Operación e instalación prevista
 
-Este documento describe el flujo objetivo. **No existe aún `Install-ScannerPortal.ps1` ni un release instalable.** La base actual se verifica offline con `tests/Test-ActivityScope.ps1`.
+Para operar la instalación actual, usar el [diagnóstico por síntoma](PILOT-TROUBLESHOOTING.md) y la [matriz de pruebas](PILOT-EVIDENCE.md). Las secciones siguientes conservan los objetivos del instalador integral y de endurecimiento.
 
 ## Instalación (SP2/SP5)
 

@@ -1,6 +1,6 @@
-﻿# Endpoint MIP Scanner
+# Endpoint MIP Scanner
 
-Versión 1.3.0. Scanner Windows PowerShell 5.1, laboratorio MIP compartido y ScannerPortal bajo una sola carpeta.
+Suite 1.4.6 disponible. Web part 0.13.2 verificado en el piloto. Consultar el [registro de pruebas y límites](ScannerPortal/docs/PILOT-EVIDENCE.md) y los [comandos de diagnóstico](ScannerPortal/docs/PILOT-TROUBLESHOOTING.md).
 
 ## Instalación única
 
