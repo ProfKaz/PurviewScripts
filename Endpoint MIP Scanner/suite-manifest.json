@@ -371,7 +371,7 @@
     },
     {
       "Path": "ScannerPortal/Work/SharePointUpload/Get-WorkGenerationInventory.ps1",
-      "Version": "0.1.0",
+      "Version": "0.2.0",
       "TrackingId": "2fa67369-33e7-442c-8a61-bdf80f52860f"
     },
     {
