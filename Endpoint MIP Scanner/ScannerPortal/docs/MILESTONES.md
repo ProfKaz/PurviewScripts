@@ -110,3 +110,7 @@ El [plan de pruebas T00–T14](END-TO-END-TEST-PLAN.md) concreta SP1–SP6 para 
 ## Avance del piloto administrado (20 de noviembre de 2026)
 
 SP2/SP3 incorporan [enrolamiento con certificado público, perfiles versionados/asignados, runner PS5.1 y subida con verificación](MANAGED-ENDPOINTS.md). No se cierran: Graph/PnP y tarea requieren pruebas reales. El principal compartido no aísla emisores entre sí. UploadedVerified no es Accepted por un procesador central. SP4 (editor/reportes), integración de clasificación/etiquetado SDK al runner, SP7 y SP8 permanecen pendientes.
+
+### Pendiente de diseño: históricos del piloto y vista de flota
+- Distinguir en Overview los registros con observaciones históricas, los agentes asignados y los agentes con señal reciente. Permitir excluir un registro histórico de la vista con un filtro reversible.
+- Para una eventual depuración, previsualizar el sitio, los registros, las fechas, los lotes y las proyecciones afectadas. Exigir dos confirmaciones independientes en la interfaz (revisión del alcance y confirmación escrita), autorización administrativa y auditoría. Definir recuperación, reconstrucción de agregados y comportamiento del receptor ante reintentos antes de habilitar el borrado.
